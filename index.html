@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Паркинг — интерактивная карта</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="page">
+    <header class="hero">
+      <h1>Интерактивная карта паркинга</h1>
+      <p>Кликните на место, чтобы увидеть цену, площадь и статус.</p>
+    </header>
+
+    <main class="layout">
+      <section class="map-card">
+        <div class="map-toolbar" aria-label="Масштаб">
+          <button id="zoom-in" type="button" title="Приблизить">+</button>
+          <button id="zoom-out" type="button" title="Отдалить">-</button>
+        </div>
+        <div id="svg-host" class="svg-host" aria-label="План паркинга"></div>
+      </section>
+
+      <aside class="info-card" aria-live="polite">
+        <h2>Данные по месту</h2>
+        <div id="spot-details" class="spot-details">
+          <p class="muted">Выберите место на карте.</p>
+        </div>
+        <div class="legend">
+          <div><span class="swatch available"></span>Доступно</div>
+          <div><span class="swatch reserved"></span>Бронь</div>
+          <div><span class="swatch sold"></span>Продано</div>
+        </div>
+      </aside>
+    </main>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/svg-pan-zoom@3.6.1/dist/svg-pan-zoom.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
