@@ -33,6 +33,7 @@
     <text class="spot-label" x="535" y="235" text-anchor="middle">P10</text>
   </g>
 
-  <rect x="300" y="150" width="80" height="60" rx="10" fill="#d4cec1" stroke="#2d2d2d" stroke-width="2" />
-  <text x="340" y="185" text-anchor="middle" font-family="Space Grotesk, Segoe UI, sans-serif" font-size="12" fill="#2d2d2d">Лифт</text>
+  <rect x="590" y="150" width="60" height="60" rx="10" fill="#d4cec1" stroke="#2d2d2d" stroke-width="2" />
+  <text x="620" y="185" text-anchor="middle" font-family="Space Grotesk, Segoe UI, sans-serif" font-size="12" fill="#2d2d2d">Лифт</text>
 </svg>
+
