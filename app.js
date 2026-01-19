@@ -14,8 +14,14 @@ const STATUS_COLORS = {
   sold: getCssVar("--sold")
 };
 
+const FLOORS = [
+  { id: "floor-1", label: "1 этаж", file: "1 этаж.svg" },
+  { id: "floor-2", label: "Демо этаж", file: "plan.svg" }
+];
+
 const detailsNode = document.getElementById("spot-details");
 const svgHost = document.getElementById("svg-host");
+const floorSwitcher = document.getElementById("floor-switcher");
 const zoomInBtn = document.getElementById("zoom-in");
 const zoomOutBtn = document.getElementById("zoom-out");
 let selectedSpot = null;
@@ -27,19 +33,25 @@ let svgElement = null;
 let refreshToken = 0;
 let hasData = false;
 let lastUpdatedAt = 0;
+let activeFloorId = FLOORS[0]?.id || null;
 
 init();
 
 async function init() {
   await loadSpotData(true);
-  await loadSvgPlan();
+  initFloorSwitcher();
+  await loadSvgPlan(getActiveFloor()?.file);
   showSelectedDetails();
   startAutoRefresh();
 }
 
-async function loadSvgPlan() {
+async function loadSvgPlan(svgPath = "plan.svg") {
   try {
-    const response = await fetch("plan.svg");
+    if (panZoomInstance) {
+      panZoomInstance.destroy();
+      panZoomInstance = null;
+    }
+    const response = await fetch(encodeURI(svgPath));
     const svgText = await response.text();
     const svgDoc = new DOMParser().parseFromString(svgText, "image/svg+xml");
     const svgEl = svgDoc.documentElement;
@@ -50,6 +62,7 @@ async function loadSvgPlan() {
 
     applySpotData(svgEl);
     initPanZoom(svgEl);
+    showSelectedDetails();
   } catch (error) {
     svgHost.innerHTML = "<p class=\"muted\">Не удалось загрузить SVG план.</p>";
   }
@@ -156,6 +169,58 @@ function initPanZoom(svgEl) {
   if (zoomOutBtn) {
     zoomOutBtn.onclick = () => panZoomInstance.zoomOut();
   }
+}
+
+function initFloorSwitcher() {
+  if (!floorSwitcher) {
+    return;
+  }
+
+  floorSwitcher.innerHTML = "";
+  FLOORS.forEach((floor) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "floor-btn";
+    button.textContent = floor.label;
+    button.dataset.floorId = floor.id;
+    if (floor.id === activeFloorId) {
+      button.classList.add("active");
+    }
+    button.addEventListener("click", () => selectFloor(floor.id));
+    floorSwitcher.appendChild(button);
+  });
+}
+
+function selectFloor(floorId) {
+  if (floorId === activeFloorId) {
+    return;
+  }
+
+  activeFloorId = floorId;
+  updateFloorButtons();
+  resetSelection();
+  loadSvgPlan(getActiveFloor()?.file);
+}
+
+function updateFloorButtons() {
+  if (!floorSwitcher) {
+    return;
+  }
+
+  floorSwitcher.querySelectorAll(".floor-btn").forEach((button) => {
+    const isActive = button.dataset.floorId === activeFloorId;
+    button.classList.toggle("active", isActive);
+  });
+}
+
+function resetSelection() {
+  selectedSpot = null;
+  selectedSpotId = null;
+  showSelectedDetails();
+}
+
+function getActiveFloor() {
+  return FLOORS.find((floor) => floor.id === activeFloorId) || FLOORS[0];
 }
 
 async function loadSpotData(isInitial = false) {

@@ -55,7 +55,8 @@ body {
 
 .svg-host {
   width: 100%;
-  aspect-ratio: 680 / 360;
+  height: min(70vh, 640px);
+  min-height: 360px;
   overflow: hidden;
   cursor: grab;
 }
@@ -103,6 +104,11 @@ body {
   .layout {
     grid-template-columns: 1fr;
   }
+
+  .svg-host {
+    height: min(60vh, 520px);
+    min-height: 320px;
+  }
 }
 
 svg {
@@ -113,15 +119,32 @@ svg {
 
 .parking-spot {
   cursor: pointer;
-  transition: transform 160ms ease, fill 160ms ease;
-}
-
-.parking-spot:hover {
-  transform: translateY(-2px);
+  transition: fill 160ms ease;
 }
 
 .map-card {
   position: relative;
+}
+
+.floor-switcher {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 4px 0 12px;
+}
+
+.floor-switcher .floor-btn {
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  padding: 6px 14px;
+  background: #f4efe4;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.floor-switcher .floor-btn.active {
+  background: var(--accent);
+  color: #ffffff;
 }
 
 .map-toolbar {
