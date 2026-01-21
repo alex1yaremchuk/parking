@@ -1,11 +1,12 @@
 const CSV_URL =
-  "https://docs.google.com/spreadsheets/d/e/2PACX-1vSg8VslzF_Df-VUljYjnEzx-GT3io2AusHsensjtTI92zGQvnyfCFFeKDxk36VdZ6p8SHeVXkeWcnPK/pub?gid=0&single=true&output=csv";
+  "https://docs.google.com/spreadsheets/d/e/2PACX-1vTH7SGADby5gPRJR44TwuMrnOyk1UgcGu3RPMdkuHOz7HCHx5AoCGw2g7Z17OqFQ1pXhQyW_5bA7JW-/pub?gid=562016189&single=true&output=csv";
 const REFRESH_MS = 5000;
+const STORAGE_UPDATED_AT_KEY = "parking:lastUpdatedAt";
 
 const STATUS_LABELS = {
-  available: "Доступно",
-  reserved: "Бронь",
-  sold: "Продано"
+  available: "свободен",
+  reserved: "забронирован",
+  sold: "продан"
 };
 
 const STATUS_COLORS = {
@@ -15,8 +16,8 @@ const STATUS_COLORS = {
 };
 
 const FLOORS = [
-  { id: "floor-1", label: "1 этаж", file: "1 этаж.svg" },
-  { id: "floor-2", label: "Демо этаж", file: "plan.svg" }
+  { id: "floor-1", label: "1 этаж", file: "floor 1.svg" },
+  { id: "floor-2", label: "2 этаж", file: "plan.svg" }
 ];
 
 const detailsNode = document.getElementById("spot-details");
@@ -24,15 +25,16 @@ const svgHost = document.getElementById("svg-host");
 const floorSwitcher = document.getElementById("floor-switcher");
 const zoomInBtn = document.getElementById("zoom-in");
 const zoomOutBtn = document.getElementById("zoom-out");
-let selectedSpot = null;
+let selectedSpots = [];
 let selectedSpotId = null;
 let panZoomInstance = null;
 let spotData = {};
 let dataLoadError = false;
 let svgElement = null;
+let spotElementsById = new Map();
 let refreshToken = 0;
 let hasData = false;
-let lastUpdatedAt = 0;
+let lastUpdatedAt = getStoredUpdatedAt();
 let activeFloorId = FLOORS[0]?.id || null;
 
 init();
@@ -68,17 +70,41 @@ async function loadSvgPlan(svgPath = "plan.svg") {
   }
 }
 
+function collectSpotElements(svgEl) {
+  const spotElements = [];
+  svgEl.querySelectorAll("g[id]").forEach((group) => {
+    const spotId = group.getAttribute("id");
+    if (!spotId || !/^P\\d+/i.test(spotId)) {
+      return;
+    }
+
+    const shape = Array.from(group.children).find((child) => {
+      const tag = child.tagName ? child.tagName.toLowerCase() : "";
+      return tag === "rect" || tag === "path" || tag === "polygon";
+    });
+    if (!shape) {
+      return;
+    }
+
+    shape.classList.add("parking-spot");
+    shape.setAttribute("data-spot-id", spotId);
+    spotElements.push(shape);
+  });
+  return spotElements;
+}
+
 function applySpotData(svgEl) {
-  const spots = svgEl.querySelectorAll(".parking-spot");
+  const spots = collectSpotElements(svgEl);
+  spotElementsById = new Map();
   spots.forEach((spotEl) => {
-    const spotId = spotEl.getAttribute("id");
+    const spotId = spotEl.getAttribute("data-spot-id");
     if (!spotId) {
       return;
     }
 
+    spotElementsById.set(spotId, spotEl);
     const status = spotData[spotId]?.status;
     spotEl.style.fill = STATUS_COLORS[status] || "#cccccc";
-    spotEl.setAttribute("data-spot-id", spotId);
     if (!spotEl.dataset.bound) {
       spotEl.addEventListener("click", () => selectSpot(spotId, spotEl));
       spotEl.addEventListener("mouseenter", () => showSpotDetails(spotId));
@@ -88,31 +114,163 @@ function applySpotData(svgEl) {
   });
 }
 
-function selectSpot(spotId, spotEl) {
-  if (selectedSpot) {
-    selectedSpot.classList.remove("selected");
+function clearSelectedSpots() {
+  selectedSpots.forEach((element) => element.classList.remove("selected"));
+  selectedSpots = [];
+}
+
+function getPairedSpotIds(spotId) {
+  const normalized = normalizeSpotId(spotId);
+  const directPair = spotData[normalized]?.pairId;
+  if (directPair) {
+    return uniqueSpotIds([normalized, directPair]);
   }
 
-  selectedSpot = spotEl;
-  selectedSpot.classList.add("selected");
+  const reversePair = Object.keys(spotData).find(
+    (id) => spotData[id]?.pairId === normalized
+  );
+  if (reversePair) {
+    return uniqueSpotIds([normalized, reversePair]);
+  }
+
+  return [normalized];
+}
+
+function uniqueSpotIds(ids) {
+  const seen = new Set();
+  return ids
+    .map((id) => normalizeSpotId(id))
+    .filter((id) => {
+      if (!id || seen.has(id)) {
+        return false;
+      }
+      seen.add(id);
+      return true;
+    });
+}
+
+function selectSpot(spotId, spotEl) {
+  clearSelectedSpots();
+
+  const spotIds = getPairedSpotIds(spotId);
   selectedSpotId = spotId;
+  selectedSpots = spotIds
+    .map((id) => spotElementsById.get(id))
+    .filter(Boolean);
+
+  selectedSpots.forEach((element) => {
+    element.classList.add("selected");
+    // Bring the selected spot to the front so the outline isn't hidden.
+    if (element.parentNode) {
+      element.parentNode.appendChild(element);
+    }
+  });
 
   showSpotDetails(spotId);
 }
 
 function showSpotDetails(spotId) {
-  const data = spotData[spotId];
-  if (!data) {
+  const entries = getSpotEntries(spotId);
+  if (entries.length === 0) {
     detailsNode.innerHTML = "<p class=\"muted\">Нет данных по месту.</p>";
     return;
   }
 
-  detailsNode.innerHTML = `
-    <p><strong>Место:</strong> ${spotId}</p>
-    <p><strong>Площадь:</strong> ${formatArea(data.area)} м²</p>
-    <p><strong>Цена:</strong> ${formatPrice(data.price)} ₽</p>
-    <p><strong>Статус:</strong> ${data.statusLabel}</p>
-  `;
+  const statusLabel = entries[0].data.statusLabel || "-";
+  const spotLabel = entries.map((entry) => entry.id).join(" + ");
+  const storageInfo = getStorageInfo(entries);
+  const totalArea = resolveTotalArea(entries);
+  const pricePerSqm = pickFirstFinite(
+    entries.map((entry) => entry.data.pricePerSqm)
+  );
+  const totalPrice =
+    Number.isFinite(totalArea) && Number.isFinite(pricePerSqm)
+      ? totalArea * pricePerSqm
+      : NaN;
+
+  let html = `<p><strong>Места:</strong> ${spotLabel}</p>`;
+  html += `<p><strong>Статус:</strong> ${statusLabel}</p>`;
+  entries.forEach((entry) => {
+    html += `<p><strong>${entry.id} — площадь м/м:</strong> ${formatArea(
+      entry.data.spotArea
+    )} м²</p>`;
+  });
+  if (storageInfo) {
+    html += `<p><strong>Кладовая:</strong> ${storageInfo.label}</p>`;
+  }
+  if (Number.isFinite(totalArea)) {
+    html += `<p><strong>Общая площадь:</strong> ${formatArea(
+      totalArea
+    )} м²</p>`;
+  }
+  if (Number.isFinite(pricePerSqm)) {
+    html += `<p><strong>Цена кв.м.:</strong> ${formatPrice(pricePerSqm)} ₽</p>`;
+  }
+  if (Number.isFinite(totalPrice)) {
+    html += `<p><strong>Цена комплекта:</strong> ${formatPrice(
+      totalPrice
+    )} ₽</p>`;
+  }
+
+  detailsNode.innerHTML = html;
+}
+
+function getSpotEntries(spotId) {
+  const spotIds = getPairedSpotIds(spotId);
+  return spotIds
+    .map((id) => ({ id, data: spotData[id] }))
+    .filter((entry) => Boolean(entry.data));
+}
+
+function getStorageInfo(entries) {
+  const entryWithStorage = entries.find(
+    (entry) => entry.data.storageNumber
+  );
+  if (!entryWithStorage) {
+    return null;
+  }
+
+  const storageArea = pickFirstFinite(
+    entries.map((entry) => entry.data.storageArea)
+  );
+  const areaLabel = Number.isFinite(storageArea)
+    ? ` (${formatArea(storageArea)} м²)`
+    : "";
+
+  return {
+    label: `${entryWithStorage.data.storageNumber}${areaLabel}`
+  };
+}
+
+function resolveTotalArea(entries) {
+  const directTotal = pickFirstFinite(
+    entries.map((entry) => entry.data.totalArea)
+  );
+  if (Number.isFinite(directTotal)) {
+    return directTotal;
+  }
+
+  const spotSum = sumNumbers(entries.map((entry) => entry.data.spotArea));
+  const storageArea = pickFirstFinite(
+    entries.map((entry) => entry.data.storageArea)
+  );
+  return sumNumbers([spotSum, storageArea]);
+}
+
+function pickFirstFinite(values) {
+  return values.find((value) => Number.isFinite(value));
+}
+
+function sumNumbers(values) {
+  let total = 0;
+  let hasValue = false;
+  values.forEach((value) => {
+    if (Number.isFinite(value)) {
+      total += value;
+      hasValue = true;
+    }
+  });
+  return hasValue ? total : NaN;
 }
 
 function showSelectedDetails() {
@@ -139,9 +297,28 @@ function formatPrice(value) {
 
 function formatArea(value) {
   if (!Number.isFinite(value)) {
-    return "—";
+    return "-";
   }
   return value.toFixed(1);
+}
+
+function getStoredUpdatedAt() {
+  if (typeof localStorage === "undefined") {
+    return 0;
+  }
+  const raw = localStorage.getItem(STORAGE_UPDATED_AT_KEY);
+  const value = Number(raw);
+  return Number.isFinite(value) ? value : 0;
+}
+
+function setStoredUpdatedAt(value) {
+  if (typeof localStorage === "undefined") {
+    return;
+  }
+  if (!Number.isFinite(value) || value <= 0) {
+    return;
+  }
+  localStorage.setItem(STORAGE_UPDATED_AT_KEY, String(value));
 }
 
 function getCssVar(name) {
@@ -214,7 +391,7 @@ function updateFloorButtons() {
 }
 
 function resetSelection() {
-  selectedSpot = null;
+  clearSelectedSpots();
   selectedSpotId = null;
   showSelectedDetails();
 }
@@ -242,7 +419,12 @@ async function loadSpotData(isInitial = false) {
         return false;
       }
 
-      const updatedAt = parsedResult.maxUpdatedAt || 0;
+      const updatedAt = parsedResult.updatedAt || 0;
+      if (updatedAt > 0 && updatedAt <= lastUpdatedAt) {
+        dataLoadError = false;
+        return false;
+      }
+
       const shouldApply =
         isInitial || updatedAt === 0 || updatedAt > lastUpdatedAt;
       if (!shouldApply) {
@@ -254,6 +436,7 @@ async function loadSpotData(isInitial = false) {
       hasData = true;
       if (updatedAt > 0) {
         lastUpdatedAt = updatedAt;
+        setStoredUpdatedAt(updatedAt);
       }
       dataLoadError = false;
       return true;
@@ -281,46 +464,79 @@ function startAutoRefresh() {
 function parseCsvData(text) {
   const rows = parseCsv(text);
   if (rows.length === 0) {
-    return { data: {}, maxUpdatedAt: 0 };
+    return { data: {}, updatedAt: 0 };
   }
 
-  const headers = rows[0].map((value) => normalizeText(value));
-  const idIdx = resolveIndex(findHeaderIndex(headers, ["идентифик", "id"]), 0);
-  const priceIdx = resolveIndex(findHeaderIndex(headers, ["цен"]), 1);
-  const areaIdx = resolveIndex(findHeaderIndex(headers, ["площад", "area"]), 2);
-  const statusIdx = resolveIndex(findHeaderIndex(headers, ["статус"]), 3);
-  const updatedIdx = resolveIndex(
-    findHeaderIndex(headers, ["обновлено", "updated"]),
+  const headerRow = rows[0] || [];
+  const updatedAt = parseDateTime(headerRow[0] || "");
+  const headers = headerRow.slice(1).map((value) => normalizeText(value));
+
+  const statusIdx = resolveIndex(findHeaderIndex(headers, ["статус"]), 0);
+  const pairIdx = resolveIndex(findHeaderIndex(headers, ["№пары", "пары", "пара"]), 1);
+  const storageIdx = resolveIndex(
+    findHeaderIndex(headers, ["№кладовой", "кладовой", "кладовая"]),
+    2
+  );
+  const spotAreaIdx = resolveIndex(
+    findHeaderIndex(headers, [
+      "площадьм/м",
+      "площадьмм",
+      "площадьмместа",
+      "площадьместа"
+    ]),
+    3
+  );
+  const storageAreaIdx = resolveIndex(
+    findHeaderIndex(headers, ["площадькладовой"]),
     4
+  );
+  const totalAreaIdx = resolveIndex(
+    findHeaderIndex(headers, ["общаяплощадь"]),
+    5
+  );
+  const priceIdx = resolveIndex(
+    findHeaderIndex(headers, ["ценакв.м", "ценаквм", "ценаквм."]),
+    6
   );
 
   const data = {};
-  let maxUpdatedAt = 0;
   rows.slice(1).forEach((row) => {
-    const spotId = (row[idIdx] || "").trim();
+    const spotId = normalizeSpotId(row[0]);
     if (!spotId) {
       return;
     }
 
-    const rawPrice = row[priceIdx] || "";
-    const rawArea = row[areaIdx] || "";
-    const rawStatus = row[statusIdx] || "";
-    const rawUpdated = row[updatedIdx] || "";
+    const rawStatus = row[statusIdx + 1] || "";
+    const rawPair = row[pairIdx + 1] || "";
+    const rawStorage = row[storageIdx + 1] || "";
+    const rawSpotArea = row[spotAreaIdx + 1] || "";
+    const rawStorageArea = row[storageAreaIdx + 1] || "";
+    const rawTotalArea = row[totalAreaIdx + 1] || "";
+    const rawPrice = row[priceIdx + 1] || "";
 
-    const price = parseNumber(rawPrice);
-    const area = parseNumber(rawArea);
     const status = normalizeStatus(rawStatus);
     const statusLabel =
-      STATUS_LABELS[status] || rawStatus.trim() || "Неизвестно";
-    const updatedAt = parseDateTime(rawUpdated);
-    if (Number.isFinite(updatedAt)) {
-      maxUpdatedAt = Math.max(maxUpdatedAt, updatedAt);
-    }
+      STATUS_LABELS[status] || rawStatus.trim() || "неизвестно";
+    const pairId = normalizeSpotId(rawPair);
+    const storageNumber = String(rawStorage || "").trim();
+    const spotArea = parseNumber(rawSpotArea);
+    const storageArea = parseNumber(rawStorageArea);
+    const totalArea = parseNumber(rawTotalArea);
+    const pricePerSqm = parseNumber(rawPrice);
 
-    data[spotId] = { price, area, status, statusLabel, updatedAt };
+    data[spotId] = {
+      status,
+      statusLabel,
+      pairId: pairId || null,
+      storageNumber,
+      spotArea,
+      storageArea,
+      totalArea,
+      pricePerSqm
+    };
   });
 
-  return { data, maxUpdatedAt };
+  return { data, updatedAt };
 }
 
 function parseCsv(text) {
@@ -380,6 +596,21 @@ function normalizeText(value) {
     .replace(/\s+/g, "");
 }
 
+function normalizeSpotId(value) {
+  const trimmed = String(value || "").trim();
+  if (!trimmed) {
+    return "";
+  }
+  if (/^P\d+$/i.test(trimmed)) {
+    const digits = trimmed.replace(/^P/i, "");
+    return `P${digits.padStart(3, "0")}`;
+  }
+  if (/^\d+$/.test(trimmed)) {
+    return `P${trimmed.padStart(3, "0")}`;
+  }
+  return trimmed;
+}
+
 function findHeaderIndex(headers, keywords) {
   return headers.findIndex((header) =>
     keywords.some((keyword) => header.includes(keyword))
@@ -397,7 +628,23 @@ function parseDateTime(value) {
   }
 
   const [datePart, timePart = "00:00:00"] = trimmed.split(" ");
-  const [month, day, year] = datePart.split("/");
+  const datePieces = datePart.split(/[./]/);
+  if (datePieces.length < 3) {
+    return NaN;
+  }
+  const [part1, part2, part3] = datePieces;
+  let day = part2;
+  let month = part1;
+  let year = part3;
+  if (datePart.includes(".")) {
+    day = part1;
+    month = part2;
+    year = part3;
+  } else if (Number(part1) > 12) {
+    day = part1;
+    month = part2;
+    year = part3;
+  }
   const [hour, minute, second] = timePart.split(":");
 
   const date = new Date(
@@ -433,10 +680,10 @@ function parseNumber(value) {
 
 function normalizeStatus(value) {
   const normalized = normalizeText(value);
-  if (normalized.includes("доступ")) {
+  if (normalized.includes("свобод")) {
     return "available";
   }
-  if (normalized.includes("брон")) {
+  if (normalized.includes("заброн")) {
     return "reserved";
   }
   if (normalized.includes("прод")) {
