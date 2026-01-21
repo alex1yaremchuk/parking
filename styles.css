@@ -119,9 +119,12 @@ svg {
 
 .parking-spot {
   cursor: pointer;
-  transition: fill 160ms ease;
+  transition: fill 160ms ease, filter 160ms ease;
 }
 
+.parking-spot:hover {
+  filter: brightness(1.15) saturate(1.2);
+}
 .map-card {
   position: relative;
 }
@@ -172,7 +175,7 @@ svg {
 
 
 .parking-spot.selected {
-  outline: 3px solid var(--accent);
+  filter: brightness(1.35) saturate(1.45);
 }
 
 .spot-label {

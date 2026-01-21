@@ -40,10 +40,15 @@ let activeFloorId = FLOORS[0]?.id || null;
 init();
 
 async function init() {
-  await loadSpotData(true);
   initFloorSwitcher();
   await loadSvgPlan(getActiveFloor()?.file);
   showSelectedDetails();
+  loadSpotData(true).then((updated) => {
+    if (updated && svgElement) {
+      applySpotData(svgElement);
+      showSelectedDetails();
+    }
+  });
   startAutoRefresh();
 }
 
@@ -72,19 +77,34 @@ async function loadSvgPlan(svgPath = "plan.svg") {
 
 function collectSpotElements(svgEl) {
   const spotElements = [];
-  svgEl.querySelectorAll("g[id]").forEach((group) => {
-    const spotId = group.getAttribute("id");
-    if (!spotId || !/^P\\d+/i.test(spotId)) {
+  let missingShapeCount = 0;
+  const groups = Array.from(svgEl.querySelectorAll("g[id]"));
+  const matchedGroups = groups.filter((group) => {
+    const id = (group.getAttribute("id") || "").trim();
+    return /^P\d+$/i.test(id);
+  });
+  groups.forEach((group) => {
+    const spotIdRaw = (group.getAttribute("id") || "").trim();
+    if (!/^P\d+$/i.test(spotIdRaw)) {
+      return;
+    }
+    const spotId = normalizeSpotId(spotIdRaw);
+
+    const shape =
+      Array.from(group.children).find((child) => {
+        const tag = child.tagName ? child.tagName.toLowerCase() : "";
+        return tag === "rect" || tag === "path" || tag === "polygon";
+      }) || group.querySelector("rect, path, polygon");
+    if (!shape) {
+      missingShapeCount += 1;
       return;
     }
 
-    const shape = Array.from(group.children).find((child) => {
-      const tag = child.tagName ? child.tagName.toLowerCase() : "";
-      return tag === "rect" || tag === "path" || tag === "polygon";
+    Array.from(group.children).forEach((child) => {
+      if (child !== shape) {
+        child.style.pointerEvents = "none";
+      }
     });
-    if (!shape) {
-      return;
-    }
 
     shape.classList.add("parking-spot");
     shape.setAttribute("data-spot-id", spotId);
@@ -150,6 +170,12 @@ function uniqueSpotIds(ids) {
 }
 
 function selectSpot(spotId, spotEl) {
+  console.log("[parking] click", {
+    rawId: spotId,
+    normalizedId: normalizeSpotId(spotId),
+    hasData: Boolean(spotData[normalizeSpotId(spotId)]),
+    paired: getPairedSpotIds(spotId)
+  });
   clearSelectedSpots();
 
   const spotIds = getPairedSpotIds(spotId);
@@ -160,10 +186,6 @@ function selectSpot(spotId, spotEl) {
 
   selectedSpots.forEach((element) => {
     element.classList.add("selected");
-    // Bring the selected spot to the front so the outline isn't hidden.
-    if (element.parentNode) {
-      element.parentNode.appendChild(element);
-    }
   });
 
   showSpotDetails(spotId);
@@ -411,6 +433,10 @@ async function loadSpotData(isInitial = false) {
     if (token === refreshToken) {
       const parsedResult = parseCsvData(text);
       const hasRows = Object.keys(parsedResult.data).length > 0;
+      console.log("[parking] loadSpotData: parsed", {
+        rows: hasRows,
+        updatedAt: parsedResult.updatedAt
+      });
 
       if (!hasRows) {
         if (!hasData) {
@@ -420,7 +446,7 @@ async function loadSpotData(isInitial = false) {
       }
 
       const updatedAt = parsedResult.updatedAt || 0;
-      if (updatedAt > 0 && updatedAt <= lastUpdatedAt) {
+      if (!isInitial && updatedAt > 0 && updatedAt <= lastUpdatedAt) {
         dataLoadError = false;
         return false;
       }
@@ -439,6 +465,11 @@ async function loadSpotData(isInitial = false) {
         setStoredUpdatedAt(updatedAt);
       }
       dataLoadError = false;
+      console.log("[parking] loadSpotData: applied", {
+        spots: Object.keys(spotData).length,
+        lastUpdatedAt,
+        csvHasP001: Boolean(spotData.P001)
+      });
       return true;
     }
   } catch (error) {
@@ -470,7 +501,6 @@ function parseCsvData(text) {
   const headerRow = rows[0] || [];
   const updatedAt = parseDateTime(headerRow[0] || "");
   const headers = headerRow.slice(1).map((value) => normalizeText(value));
-
   const statusIdx = resolveIndex(findHeaderIndex(headers, ["статус"]), 0);
   const pairIdx = resolveIndex(findHeaderIndex(headers, ["№пары", "пары", "пара"]), 1);
   const storageIdx = resolveIndex(
@@ -535,7 +565,6 @@ function parseCsvData(text) {
       pricePerSqm
     };
   });
-
   return { data, updatedAt };
 }
 
@@ -597,18 +626,24 @@ function normalizeText(value) {
 }
 
 function normalizeSpotId(value) {
-  const trimmed = String(value || "").trim();
-  if (!trimmed) {
+  const raw = String(value || "");
+  const cleaned = raw
+    .replace(/\uFEFF/g, "")
+    .replace(/\u00A0/g, "")
+    .replace(/\s+/g, "")
+    .replace(/[Р]/g, "P")
+    .trim();
+  if (!cleaned) {
     return "";
   }
-  if (/^P\d+$/i.test(trimmed)) {
-    const digits = trimmed.replace(/^P/i, "");
+  if (/^P\d+$/i.test(cleaned)) {
+    const digits = cleaned.replace(/^P/i, "");
     return `P${digits.padStart(3, "0")}`;
   }
-  if (/^\d+$/.test(trimmed)) {
-    return `P${trimmed.padStart(3, "0")}`;
+  if (/^\d+$/.test(cleaned)) {
+    return `P${cleaned.padStart(3, "0")}`;
   }
-  return trimmed;
+  return "";
 }
 
 function findHeaderIndex(headers, keywords) {
