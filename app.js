@@ -202,13 +202,16 @@ function showSpotDetails(spotId) {
   const spotLabel = entries.map((entry) => entry.id).join(" + ");
   const storageInfo = getStorageInfo(entries);
   const totalArea = resolveTotalArea(entries);
-  const pricePerSqm = pickFirstFinite(
-    entries.map((entry) => entry.data.pricePerSqm)
+  const totalPrice = sumNumbers(
+    entries.map((entry) => {
+      const entryArea = resolveEntryArea(entry.data);
+      const pricePerSqm = entry.data.pricePerSqm;
+      if (!Number.isFinite(entryArea) || !Number.isFinite(pricePerSqm)) {
+        return NaN;
+      }
+      return entryArea * pricePerSqm;
+    })
   );
-  const totalPrice =
-    Number.isFinite(totalArea) && Number.isFinite(pricePerSqm)
-      ? totalArea * pricePerSqm
-      : NaN;
 
   let html = `<p><strong>Места:</strong> ${spotLabel}</p>`;
   html += `<p><strong>Статус:</strong> ${statusLabel}</p>`;
@@ -225,8 +228,15 @@ function showSpotDetails(spotId) {
       totalArea
     )} м²</p>`;
   }
-  if (Number.isFinite(pricePerSqm)) {
-    html += `<p><strong>Цена кв.м.:</strong> ${formatPrice(pricePerSqm)} ₽</p>`;
+  if (entries.some((entry) => Number.isFinite(entry.data.pricePerSqm))) {
+    const priceLabels = entries
+      .map((entry) =>
+        Number.isFinite(entry.data.pricePerSqm)
+          ? `${entry.id}: ${formatPrice(entry.data.pricePerSqm)} ₽`
+          : `${entry.id}: -`
+      )
+      .join(", ");
+    html += `<p><strong>Цена кв.м.:</strong> ${priceLabels}</p>`;
   }
   if (Number.isFinite(totalPrice)) {
     html += `<p><strong>Цена комплекта:</strong> ${formatPrice(
@@ -265,18 +275,26 @@ function getStorageInfo(entries) {
 }
 
 function resolveTotalArea(entries) {
-  const directTotal = pickFirstFinite(
-    entries.map((entry) => entry.data.totalArea)
-  );
-  if (Number.isFinite(directTotal)) {
-    return directTotal;
-  }
-
   const spotSum = sumNumbers(entries.map((entry) => entry.data.spotArea));
   const storageArea = pickFirstFinite(
     entries.map((entry) => entry.data.storageArea)
   );
-  return sumNumbers([spotSum, storageArea]);
+  const combined = sumNumbers([spotSum, storageArea]);
+
+  if (entries.length > 1) {
+    return combined;
+  }
+
+  const directTotal = pickFirstFinite(
+    entries.map((entry) => entry.data.totalArea)
+  );
+  return Number.isFinite(directTotal) ? directTotal : combined;
+}
+
+function resolveEntryArea(data) {
+  const spotArea = data?.spotArea;
+  const storageArea = data?.storageArea;
+  return sumNumbers([spotArea, storageArea]);
 }
 
 function pickFirstFinite(values) {
