@@ -70,6 +70,11 @@ body {
   font-size: 1.1rem;
 }
 
+.info-card {
+  display: flex;
+  flex-direction: column;
+}
+
 .spot-details {
   border: 1px dashed var(--accent);
   padding: 12px;
@@ -86,18 +91,25 @@ body {
 }
 
 .legend {
-  margin-top: 16px;
+  margin-top: auto;
+  padding-top: 16px;
   display: grid;
   gap: 8px;
 }
 
 .legend .swatch {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 14px;
   height: 14px;
   border: 1px solid var(--stroke);
   margin-right: 8px;
   vertical-align: middle;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--ink);
 }
 
 .swatch.available { background: var(--available); }
