@@ -87,6 +87,7 @@ async function loadSvgPlan(svgPath = "plan.svg") {
 function collectSpotElements(svgEl) {
   const spotElements = [];
   let missingShapeCount = 0;
+  const seenIds = new Set();
   const groups = Array.from(svgEl.querySelectorAll("g[id]"));
   groups.forEach((group) => {
     const spotIdRaw = (group.getAttribute("id") || "").trim();
@@ -94,6 +95,9 @@ function collectSpotElements(svgEl) {
       return;
     }
     const spotId = normalizeUnitId(spotIdRaw);
+    if (!spotId || seenIds.has(spotId)) {
+      return;
+    }
 
     const shape =
       Array.from(group.children).find((child) => {
@@ -114,12 +118,46 @@ function collectSpotElements(svgEl) {
     shape.classList.add("parking-spot");
     shape.setAttribute("data-spot-id", spotId);
     spotElements.push(shape);
+    seenIds.add(spotId);
+  });
+  const directShapes = Array.from(
+    svgEl.querySelectorAll("rect[id], path[id], polygon[id]")
+  );
+  directShapes.forEach((shape) => {
+    const spotIdRaw = (shape.getAttribute("id") || "").trim();
+    if (!/^(P|K)\d+$/i.test(spotIdRaw)) {
+      return;
+    }
+    const spotId = normalizeUnitId(spotIdRaw);
+    if (!spotId || seenIds.has(spotId)) {
+      return;
+    }
+    shape.classList.add("parking-spot");
+    shape.setAttribute("data-spot-id", spotId);
+    spotElements.push(shape);
+    seenIds.add(spotId);
   });
   return spotElements;
 }
 
+function collectLabelElements(svgEl) {
+  const labelsById = new Map();
+  svgEl.querySelectorAll(".spot-label").forEach((label) => {
+    const labelId = normalizeUnitId(label.textContent);
+    if (!labelId) {
+      return;
+    }
+    if (!labelsById.has(labelId)) {
+      labelsById.set(labelId, []);
+    }
+    labelsById.get(labelId).push(label);
+  });
+  return labelsById;
+}
+
 function applySpotData(svgEl) {
   const spots = collectSpotElements(svgEl);
+  const labelsById = collectLabelElements(svgEl);
   spotElementsById = new Map();
   spots.forEach((spotEl) => {
     const spotId = spotEl.getAttribute("data-spot-id");
@@ -142,6 +180,7 @@ function applySpotData(svgEl) {
     const baseFill = resolveBaseFill(spotId, status) || "#cccccc";
     spotEl.dataset.baseFill = baseFill;
     spotEl.style.fill = baseFill;
+    setSpotLabelVisibility(spotId, spotEl, status, labelsById);
     if (!spotEl.dataset.bound) {
       spotEl.addEventListener("click", (event) => {
         selectSpot(spotId, spotEl);
@@ -150,9 +189,7 @@ function applySpotData(svgEl) {
         event.stopPropagation();
       });
       spotEl.addEventListener("mouseenter", (event) => {
-        if (!spotEl.classList.contains("selected")) {
-          applyHoverFill(spotEl);
-        }
+        applyHoverToSet(spotId);
         showSpotDetails(spotId);
         if (!spotEl.classList.contains("selected")) {
           scheduleTooltip(spotId, event);
@@ -169,11 +206,7 @@ function applySpotData(svgEl) {
         }
       });
       spotEl.addEventListener("mouseleave", () => {
-        if (spotEl.classList.contains("selected")) {
-          applySelectedFill(spotEl);
-        } else {
-          applyBaseFill(spotEl);
-        }
+        clearHoverFromSet(spotId);
         hideTooltip();
         showSelectedDetails();
       });
@@ -588,6 +621,63 @@ function applyBaseFill(spotEl) {
   if (baseFill) {
     spotEl.style.fill = baseFill;
   }
+}
+
+function getSpotElementsForIds(spotIds) {
+  if (!Array.isArray(spotIds)) {
+    return [];
+  }
+  return spotIds.map((id) => spotElementsById.get(id)).filter(Boolean);
+}
+
+function applyHoverToSet(spotId) {
+  const spotIds = getSelectionIds(spotId);
+  const elements = getSpotElementsForIds(spotIds);
+  elements.forEach((element) => {
+    if (!element.classList.contains("selected")) {
+      applyHoverFill(element);
+    }
+    element.dataset.hovered = "true";
+  });
+}
+
+function clearHoverFromSet(spotId) {
+  const spotIds = getSelectionIds(spotId);
+  const elements = getSpotElementsForIds(spotIds);
+  elements.forEach((element) => {
+    if (element.classList.contains("selected")) {
+      applySelectedFill(element);
+    } else {
+      applyBaseFill(element);
+    }
+    delete element.dataset.hovered;
+  });
+}
+
+function setSpotLabelVisibility(spotId, spotEl, status, labelsById) {
+  if (!spotId || !spotEl) {
+    return;
+  }
+  const hide = status === "sold";
+  const labelElements = [];
+  const group = spotEl.closest("g[id]");
+  if (group) {
+    Array.from(group.children).forEach((child) => {
+      if (child !== spotEl) {
+        labelElements.push(child);
+      }
+    });
+  }
+  const textLabels = labelsById?.get(spotId);
+  if (textLabels) {
+    labelElements.push(...textLabels);
+  }
+  if (labelElements.length === 0) {
+    return;
+  }
+  labelElements.forEach((element) => {
+    element.style.opacity = hide ? "0" : "1";
+  });
 }
 
 function resolveBaseFill(spotId, status) {
