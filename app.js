@@ -775,7 +775,7 @@ function formatArea(value) {
   if (!Number.isFinite(value)) {
     return "-";
   }
-  return value.toFixed(1);
+  return value.toFixed(2);
 }
 
 function getStoredUpdatedAt() {
