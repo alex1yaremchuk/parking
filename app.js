@@ -14,6 +14,10 @@ const STATUS_COLORS = {
   reserved: getCssVar("--reserved"),
   sold: getCssVar("--sold")
 };
+const STORAGE_AVAILABLE_COLOR =
+  getCssVar("--storage-available") || STATUS_COLORS.available;
+const HOVER_FILL = getCssVar("--hover") || getCssVar("--accent");
+const CLICK_FILL = HOVER_FILL;
 
 const FLOORS = [
   { id: "floor-1", label: "1 этаж", file: "floor_1.svg" },
@@ -135,7 +139,7 @@ function applySpotData(svgEl) {
         status = spotData[parkingMatch]?.status;
       }
     }
-    const baseFill = STATUS_COLORS[status] || "#cccccc";
+    const baseFill = resolveBaseFill(spotId, status) || "#cccccc";
     spotEl.dataset.baseFill = baseFill;
     spotEl.style.fill = baseFill;
     if (!spotEl.dataset.bound) {
@@ -586,9 +590,18 @@ function applyBaseFill(spotEl) {
   }
 }
 
+function resolveBaseFill(spotId, status) {
+  const isStorage =
+    (spotId && spotId.startsWith("K")) || spotData[spotId]?.kind === "storage";
+  if (status === "available" && isStorage) {
+    return STORAGE_AVAILABLE_COLOR || STATUS_COLORS.available || "";
+  }
+  return STATUS_COLORS[status] || "";
+}
+
 function applyHoverFill(spotEl) {
   const baseFill = spotEl?.dataset?.baseFill;
-  const hoverFill = adjustHexColor(baseFill, 0.18);
+  const hoverFill = HOVER_FILL || adjustHexColor(baseFill, 0.18);
   if (hoverFill) {
     spotEl.style.fill = hoverFill;
   }
@@ -596,7 +609,7 @@ function applyHoverFill(spotEl) {
 
 function applySelectedFill(spotEl) {
   const baseFill = spotEl?.dataset?.baseFill;
-  const selectedFill = adjustHexColor(baseFill, 0.32);
+  const selectedFill = CLICK_FILL || adjustHexColor(baseFill, 0.32);
   if (selectedFill) {
     spotEl.style.fill = selectedFill;
   }

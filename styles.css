@@ -1,15 +1,18 @@
 @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600&display=swap');
 
 :root {
-  --bg: #f3f1e9;
+  --bg: #fcf7f3;
   --card: #ffffff;
-  --ink: #1e1e1e;
-  --muted: #6b6b6b;
-  --accent: #2b5c6b;
-  --available: #4c9f70;
-  --reserved: #e1a64d;
-  --sold: #c0504a;
-  --stroke: #2d2d2d;
+  --ink: #50331d;
+  --muted: #6f513b;
+  --accent: #d6a681;
+  --available: #fcf7f3;
+  --storage-available: #f5e4d6;
+  --reserved: #e7cbb6;
+  --sold: #e7cbb6;
+  --hover: #d6a681;
+  --outline: #e7cbb6;
+  --stroke: #50331d;
 }
 
 * { box-sizing: border-box; }
@@ -18,7 +21,7 @@ body {
   margin: 0;
   font-family: "Space Grotesk", "Segoe UI", sans-serif;
   color: var(--ink);
-  background: radial-gradient(circle at top left, #f7efe0, #e7e0d0 45%, #d9d4c7 100%);
+  background: radial-gradient(circle at top left, #fcf7f3, #f5e4d6 45%, #e7cbb6 100%);
 }
 
 .page {
@@ -50,7 +53,7 @@ body {
   border: 2px solid var(--ink);
   border-radius: 16px;
   padding: 16px;
-  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 12px 24px rgba(80, 51, 29, 0.12);
 }
 
 .svg-host {
@@ -68,7 +71,7 @@ body {
 }
 
 .spot-details {
-  border: 1px dashed #c7c7c7;
+  border: 1px dashed var(--accent);
   padding: 12px;
   border-radius: 12px;
   min-height: 140px;
@@ -121,6 +124,7 @@ svg {
 .parking-spot {
   cursor: pointer;
   transition: fill 160ms ease;
+  opacity: 1;
 }
 .map-card {
   position: relative;
@@ -137,14 +141,14 @@ svg {
   border: 2px solid var(--ink);
   border-radius: 999px;
   padding: 6px 14px;
-  background: #f4efe4;
+  background: #f5e4d6;
   font-weight: 600;
   cursor: pointer;
 }
 
 .floor-switcher .floor-btn.active {
   background: var(--accent);
-  color: #ffffff;
+  color: var(--ink);
 }
 
 .map-toolbar {
@@ -161,13 +165,13 @@ svg {
   height: 36px;
   border-radius: 10px;
   border: 2px solid var(--ink);
-  background: #fff8ee;
+  background: var(--bg);
   font-weight: 600;
   cursor: pointer;
 }
 
 .map-toolbar button:hover {
-  background: #f0e7d7;
+  background: #f5e4d6;
 }
 
 
@@ -188,13 +192,13 @@ svg {
   z-index: 4;
   max-width: 240px;
   padding: 8px 10px;
-  background: #ffffff;
-  border: 1px solid #222222;
+  background: var(--card);
+  border: 1px solid var(--outline);
   border-radius: 10px;
-  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.16);
+  box-shadow: 0 8px 16px rgba(80, 51, 29, 0.18);
   font-size: 12px;
   line-height: 1.3;
-  color: #1e1e1e;
+  color: var(--ink);
   opacity: 0;
   transition: opacity 120ms ease;
   pointer-events: none;
