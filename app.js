@@ -16,7 +16,7 @@ const STATUS_COLORS = {
 };
 
 const FLOORS = [
-  { id: "floor-1", label: "1 этаж", file: "floor 1.svg" },
+  { id: "floor-1", label: "1 этаж", file: "floor_1.svg" },
   { id: "floor-2", label: "2 этаж", file: "plan.svg" }
 ];
 
@@ -79,16 +79,12 @@ function collectSpotElements(svgEl) {
   const spotElements = [];
   let missingShapeCount = 0;
   const groups = Array.from(svgEl.querySelectorAll("g[id]"));
-  const matchedGroups = groups.filter((group) => {
-    const id = (group.getAttribute("id") || "").trim();
-    return /^P\d+$/i.test(id);
-  });
   groups.forEach((group) => {
     const spotIdRaw = (group.getAttribute("id") || "").trim();
-    if (!/^P\d+$/i.test(spotIdRaw)) {
+    if (!/^(P|K)\d+$/i.test(spotIdRaw)) {
       return;
     }
-    const spotId = normalizeSpotId(spotIdRaw);
+    const spotId = normalizeUnitId(spotIdRaw);
 
     const shape =
       Array.from(group.children).find((child) => {
@@ -123,43 +119,130 @@ function applySpotData(svgEl) {
     }
 
     spotElementsById.set(spotId, spotEl);
-    const status = spotData[spotId]?.status;
-    spotEl.style.fill = STATUS_COLORS[status] || "#cccccc";
+    let status = spotData[spotId]?.status;
+    if (!status && spotId.startsWith("K")) {
+      const parkingMatch = Object.keys(spotData).find(
+        (id) =>
+          spotData[id]?.kind === "parking" &&
+          normalizeStorageId(spotData[id]?.storageNumber) === spotId
+      );
+      if (parkingMatch) {
+        status = spotData[parkingMatch]?.status;
+      }
+    }
+    const baseFill = STATUS_COLORS[status] || "#cccccc";
+    spotEl.dataset.baseFill = baseFill;
+    spotEl.style.fill = baseFill;
     if (!spotEl.dataset.bound) {
       spotEl.addEventListener("click", () => selectSpot(spotId, spotEl));
-      spotEl.addEventListener("mouseenter", () => showSpotDetails(spotId));
-      spotEl.addEventListener("mouseleave", () => showSelectedDetails());
+      spotEl.addEventListener("mouseenter", () => {
+        if (!spotEl.classList.contains("selected")) {
+          applyHoverFill(spotEl);
+        }
+        showSpotDetails(spotId);
+      });
+      spotEl.addEventListener("mouseleave", () => {
+        if (spotEl.classList.contains("selected")) {
+          applySelectedFill(spotEl);
+        } else {
+          applyBaseFill(spotEl);
+        }
+        showSelectedDetails();
+      });
       spotEl.dataset.bound = "true";
     }
   });
 }
 
 function clearSelectedSpots() {
-  selectedSpots.forEach((element) => element.classList.remove("selected"));
+  selectedSpots.forEach((element) => {
+    element.classList.remove("selected");
+    applyBaseFill(element);
+  });
   selectedSpots = [];
 }
 
-function getPairedSpotIds(spotId) {
-  const normalized = normalizeSpotId(spotId);
+function getParkingSetIds(parkingId) {
+  const normalized = normalizeParkingId(parkingId);
+  if (!normalized) {
+    return [];
+  }
+
+  const ids = [normalized];
   const directPair = spotData[normalized]?.pairId;
   if (directPair) {
-    return uniqueSpotIds([normalized, directPair]);
+    ids.push(normalizeParkingId(directPair));
   }
 
   const reversePair = Object.keys(spotData).find(
-    (id) => spotData[id]?.pairId === normalized
+    (id) =>
+      spotData[id]?.kind === "parking" && spotData[id]?.pairId === normalized
   );
   if (reversePair) {
-    return uniqueSpotIds([normalized, reversePair]);
+    ids.push(normalizeParkingId(reversePair));
   }
 
-  return [normalized];
+  return uniqueIds(ids);
 }
 
-function uniqueSpotIds(ids) {
+function getStorageIdsForParkingSet(parkingIds) {
+  const storageIds = [];
+  parkingIds.forEach((parkingId) => {
+    const storageId = normalizeStorageId(spotData[parkingId]?.storageNumber);
+    if (storageId) {
+      storageIds.push(storageId);
+    }
+  });
+  return uniqueIds(storageIds);
+}
+
+function getParkingIdsForStorage(storageId) {
+  const normalized = normalizeStorageId(storageId);
+  if (!normalized) {
+    return [];
+  }
+  return Object.keys(spotData).filter(
+    (id) =>
+      spotData[id]?.kind === "parking" &&
+      normalizeStorageId(spotData[id]?.storageNumber) === normalized
+  );
+}
+
+function getSelectionIds(unitId) {
+  const normalized = normalizeUnitId(unitId);
+  if (!normalized) {
+    return [];
+  }
+
+  if (normalized.startsWith("P")) {
+    const parkingSet = getParkingSetIds(normalized);
+    const storageIds = getStorageIdsForParkingSet(parkingSet);
+    return uniqueIds([...parkingSet, ...storageIds]);
+  }
+
+  if (normalized.startsWith("K")) {
+    const parkingIds = getParkingIdsForStorage(normalized);
+    if (parkingIds.length === 0) {
+      return [normalized];
+    }
+
+    const parkingSet = uniqueIds(
+      parkingIds.flatMap((id) => getParkingSetIds(id))
+    );
+    const storageIds = uniqueIds([
+      ...getStorageIdsForParkingSet(parkingSet),
+      normalized
+    ]);
+    return uniqueIds([...parkingSet, ...storageIds]);
+  }
+
+  return [];
+}
+
+function uniqueIds(ids) {
   const seen = new Set();
   return ids
-    .map((id) => normalizeSpotId(id))
+    .map((id) => normalizeUnitId(id))
     .filter((id) => {
       if (!id || seen.has(id)) {
         return false;
@@ -170,15 +253,9 @@ function uniqueSpotIds(ids) {
 }
 
 function selectSpot(spotId, spotEl) {
-  console.log("[parking] click", {
-    rawId: spotId,
-    normalizedId: normalizeSpotId(spotId),
-    hasData: Boolean(spotData[normalizeSpotId(spotId)]),
-    paired: getPairedSpotIds(spotId)
-  });
   clearSelectedSpots();
 
-  const spotIds = getPairedSpotIds(spotId);
+  const spotIds = getSelectionIds(spotId);
   selectedSpotId = spotId;
   selectedSpots = spotIds
     .map((id) => spotElementsById.get(id))
@@ -186,11 +263,11 @@ function selectSpot(spotId, spotEl) {
 
   selectedSpots.forEach((element) => {
     element.classList.add("selected");
+    applySelectedFill(element);
   });
 
   showSpotDetails(spotId);
 }
-
 function showSpotDetails(spotId) {
   const entries = getSpotEntries(spotId);
   if (entries.length === 0) {
@@ -198,13 +275,15 @@ function showSpotDetails(spotId) {
     return;
   }
 
+  const entryLabels = entries.map((entry) => formatUnitLabel(entry.id));
   const statusLabel = entries[0].data.statusLabel || "-";
-  const spotLabel = entries.map((entry) => entry.id).join(" + ");
-  const storageInfo = getStorageInfo(entries);
-  const totalArea = resolveTotalArea(entries);
+  const spotLabel = entryLabels.join(" + ");
+  const storageEntryIds = getStorageEntryIds(entries);
+  const storageInfo = getStorageInfo(entries, storageEntryIds);
+  const totalArea = resolveTotalArea(entries, storageEntryIds);
   const totalPrice = sumNumbers(
     entries.map((entry) => {
-      const entryArea = resolveEntryArea(entry.data);
+      const entryArea = resolveEntryArea(entry, storageEntryIds);
       const pricePerSqm = entry.data.pricePerSqm;
       if (!Number.isFinite(entryArea) || !Number.isFinite(pricePerSqm)) {
         return NaN;
@@ -213,12 +292,21 @@ function showSpotDetails(spotId) {
     })
   );
 
-  let html = `<p><strong>Места:</strong> ${spotLabel}</p>`;
+  const isSingle = entries.length === 1;
+  const isStorageOnly = isSingle && entries[0].data.kind === "storage";
+  const titleLabel = isStorageOnly ? "Кладовая" : "Места";
+  let html = `<p><strong>${titleLabel}:</strong> ${spotLabel}</p>`;
   html += `<p><strong>Статус:</strong> ${statusLabel}</p>`;
   entries.forEach((entry) => {
-    html += `<p><strong>${entry.id} — площадь м/м:</strong> ${formatArea(
-      entry.data.spotArea
-    )} м²</p>`;
+    if (entry.data.kind === "storage") {
+      html += `<p><strong>${formatUnitLabel(
+        entry.id
+      )} — площадь кладовой:</strong> ${formatArea(entry.data.storageArea)} м²</p>`;
+      return;
+    }
+    html += `<p><strong>${formatUnitLabel(
+      entry.id
+    )} — площадь м/м:</strong> ${formatArea(entry.data.spotArea)} м²</p>`;
   });
   if (storageInfo) {
     html += `<p><strong>Кладовая:</strong> ${storageInfo.label}</p>`;
@@ -232,33 +320,45 @@ function showSpotDetails(spotId) {
     const priceLabels = entries
       .map((entry) =>
         Number.isFinite(entry.data.pricePerSqm)
-          ? `${entry.id}: ${formatPrice(entry.data.pricePerSqm)} ₽`
-          : `${entry.id}: -`
+          ? `${formatUnitLabel(entry.id)}: ${formatPrice(entry.data.pricePerSqm)} ₽`
+          : `${formatUnitLabel(entry.id)}: -`
       )
       .join(", ");
     html += `<p><strong>Цена кв.м.:</strong> ${priceLabels}</p>`;
   }
   if (Number.isFinite(totalPrice)) {
-    html += `<p><strong>Цена комплекта:</strong> ${formatPrice(
-      totalPrice
-    )} ₽</p>`;
+    const priceTitle = isSingle ? "Цена" : "Цена комплекта";
+    html += `<p><strong>${priceTitle}:</strong> ${formatPrice(totalPrice)} ₽</p>`;
   }
 
   detailsNode.innerHTML = html;
 }
 
 function getSpotEntries(spotId) {
-  const spotIds = getPairedSpotIds(spotId);
+  const spotIds = getSelectionIds(spotId);
   return spotIds
     .map((id) => ({ id, data: spotData[id] }))
     .filter((entry) => Boolean(entry.data));
 }
 
-function getStorageInfo(entries) {
+function getStorageEntryIds(entries) {
+  return new Set(
+    entries
+      .filter((entry) => entry.data.kind === "storage")
+      .map((entry) => entry.id)
+  );
+}
+
+function getStorageInfo(entries, storageEntryIds) {
   const entryWithStorage = entries.find(
-    (entry) => entry.data.storageNumber
+    (entry) => entry.data.kind === "parking" && entry.data.storageNumber
   );
   if (!entryWithStorage) {
+    return null;
+  }
+
+  const storageId = normalizeStorageId(entryWithStorage.data.storageNumber);
+  if (storageId && storageEntryIds.has(storageId)) {
     return null;
   }
 
@@ -270,31 +370,103 @@ function getStorageInfo(entries) {
     : "";
 
   return {
-    label: `${entryWithStorage.data.storageNumber}${areaLabel}`
+    label: `${formatUnitLabel(entryWithStorage.data.storageNumber)}${areaLabel}`
   };
 }
 
-function resolveTotalArea(entries) {
-  const spotSum = sumNumbers(entries.map((entry) => entry.data.spotArea));
-  const storageArea = pickFirstFinite(
-    entries.map((entry) => entry.data.storageArea)
+function resolveTotalArea(entries, storageEntryIds) {
+  return sumNumbers(
+    entries.map((entry) => resolveEntryArea(entry, storageEntryIds))
   );
-  const combined = sumNumbers([spotSum, storageArea]);
-
-  if (entries.length > 1) {
-    return combined;
-  }
-
-  const directTotal = pickFirstFinite(
-    entries.map((entry) => entry.data.totalArea)
-  );
-  return Number.isFinite(directTotal) ? directTotal : combined;
 }
 
-function resolveEntryArea(data) {
-  const spotArea = data?.spotArea;
-  const storageArea = data?.storageArea;
-  return sumNumbers([spotArea, storageArea]);
+function resolveEntryArea(entry, storageEntryIds) {
+  const data = entry?.data;
+  if (!data) {
+    return NaN;
+  }
+  if (data.kind === "storage") {
+    return data.storageArea;
+  }
+  if (data.kind === "parking") {
+    const spotArea = data.spotArea;
+    const storageArea = data.storageArea;
+    const storageId = normalizeStorageId(data.storageNumber);
+    const includeStorage =
+      Number.isFinite(storageArea) &&
+      (!storageId || !storageEntryIds.has(storageId));
+    return sumNumbers([spotArea, includeStorage ? storageArea : NaN]);
+  }
+  return NaN;
+}
+
+function formatUnitLabel(value) {
+  const normalized = normalizeUnitId(value);
+  if (!normalized) {
+    return "-";
+  }
+  if (normalized.startsWith("P")) {
+    const digits = normalized.slice(1);
+    return `№${Number.parseInt(digits, 10)}`;
+  }
+  if (normalized.startsWith("K")) {
+    const digits = normalized.slice(1).padStart(4, "0");
+    const part1 = Number.parseInt(digits.slice(0, 2), 10);
+    const part2 = Number.parseInt(digits.slice(2), 10);
+    return `№${part1}.${part2}`;
+  }
+  return normalized;
+}
+
+function applyBaseFill(spotEl) {
+  const baseFill = spotEl?.dataset?.baseFill;
+  if (baseFill) {
+    spotEl.style.fill = baseFill;
+  }
+}
+
+function applyHoverFill(spotEl) {
+  const baseFill = spotEl?.dataset?.baseFill;
+  const hoverFill = adjustHexColor(baseFill, 0.18);
+  if (hoverFill) {
+    spotEl.style.fill = hoverFill;
+  }
+}
+
+function applySelectedFill(spotEl) {
+  const baseFill = spotEl?.dataset?.baseFill;
+  const selectedFill = adjustHexColor(baseFill, 0.32);
+  if (selectedFill) {
+    spotEl.style.fill = selectedFill;
+  }
+}
+
+function adjustHexColor(hex, amount) {
+  if (!hex || typeof hex !== "string") {
+    return "";
+  }
+  const normalized = hex.startsWith("#") ? hex.slice(1) : hex;
+  const full =
+    normalized.length === 3
+      ? normalized
+          .split("")
+          .map((c) => c + c)
+          .join("")
+      : normalized;
+  if (full.length !== 6) {
+    return "";
+  }
+  const num = Number.parseInt(full, 16);
+  if (Number.isNaN(num)) {
+    return "";
+  }
+  const r = (num >> 16) & 0xff;
+  const g = (num >> 8) & 0xff;
+  const b = num & 0xff;
+  const factor = 1 + amount;
+  const clamp = (value) => Math.max(0, Math.min(255, Math.round(value)));
+  const next = (clamp(r * factor) << 16) | (clamp(g * factor) << 8) | clamp(b * factor);
+  return `#${next.toString(16).padStart(6, "0")}`;
 }
 
 function pickFirstFinite(values) {
@@ -451,10 +623,6 @@ async function loadSpotData(isInitial = false) {
     if (token === refreshToken) {
       const parsedResult = parseCsvData(text);
       const hasRows = Object.keys(parsedResult.data).length > 0;
-      console.log("[parking] loadSpotData: parsed", {
-        rows: hasRows,
-        updatedAt: parsedResult.updatedAt
-      });
 
       if (!hasRows) {
         if (!hasData) {
@@ -483,11 +651,6 @@ async function loadSpotData(isInitial = false) {
         setStoredUpdatedAt(updatedAt);
       }
       dataLoadError = false;
-      console.log("[parking] loadSpotData: applied", {
-        spots: Object.keys(spotData).length,
-        lastUpdatedAt,
-        csvHasP001: Boolean(spotData.P001)
-      });
       return true;
     }
   } catch (error) {
@@ -549,11 +712,12 @@ function parseCsvData(text) {
 
   const data = {};
   rows.slice(1).forEach((row) => {
-    const spotId = normalizeSpotId(row[0]);
-    if (!spotId) {
+    const unitId = normalizeUnitId(row[0]);
+    if (!unitId) {
       return;
     }
 
+    const kind = unitId.startsWith("K") ? "storage" : "parking";
     const rawStatus = row[statusIdx + 1] || "";
     const rawPair = row[pairIdx + 1] || "";
     const rawStorage = row[storageIdx + 1] || "";
@@ -565,19 +729,22 @@ function parseCsvData(text) {
     const status = normalizeStatus(rawStatus);
     const statusLabel =
       STATUS_LABELS[status] || rawStatus.trim() || "неизвестно";
-    const pairId = normalizeSpotId(rawPair);
-    const storageNumber = String(rawStorage || "").trim();
+    const pairId = kind === "parking" ? normalizeParkingId(rawPair) : "";
+    const storageNumber =
+      kind === "parking" ? normalizeStorageId(rawStorage) : "";
     const spotArea = parseNumber(rawSpotArea);
-    const storageArea = parseNumber(rawStorageArea);
+    const storageArea =
+      kind === "storage" ? parseNumber(rawSpotArea) : parseNumber(rawStorageArea);
     const totalArea = parseNumber(rawTotalArea);
     const pricePerSqm = parseNumber(rawPrice);
 
-    data[spotId] = {
+    data[unitId] = {
+      kind,
       status,
       statusLabel,
       pairId: pairId || null,
       storageNumber,
-      spotArea,
+      spotArea: kind === "storage" ? NaN : spotArea,
       storageArea,
       totalArea,
       pricePerSqm
@@ -643,25 +810,41 @@ function normalizeText(value) {
     .replace(/\s+/g, "");
 }
 
-function normalizeSpotId(value) {
+function normalizeUnitId(value) {
   const raw = String(value || "");
   const cleaned = raw
-    .replace(/\uFEFF/g, "")
-    .replace(/\u00A0/g, "")
+    .replace(/﻿/g, "")
+    .replace(/ /g, "")
     .replace(/\s+/g, "")
     .replace(/[Р]/g, "P")
-    .trim();
+    .replace(/[К]/g, "K")
+    .trim()
+    .toUpperCase();
   if (!cleaned) {
     return "";
   }
-  if (/^P\d+$/i.test(cleaned)) {
-    const digits = cleaned.replace(/^P/i, "");
+  if (/^P\d+$/.test(cleaned)) {
+    const digits = cleaned.replace(/^P/, "");
     return `P${digits.padStart(3, "0")}`;
+  }
+  if (/^K\d+$/.test(cleaned)) {
+    const digits = cleaned.replace(/^K/, "");
+    return `K${digits.padStart(4, "0")}`;
   }
   if (/^\d+$/.test(cleaned)) {
     return `P${cleaned.padStart(3, "0")}`;
   }
   return "";
+}
+
+function normalizeParkingId(value) {
+  const normalized = normalizeUnitId(value);
+  return normalized.startsWith("P") ? normalized : "";
+}
+
+function normalizeStorageId(value) {
+  const normalized = normalizeUnitId(value);
+  return normalized.startsWith("K") ? normalized : "";
 }
 
 function findHeaderIndex(headers, keywords) {
@@ -744,4 +927,3 @@ function normalizeStatus(value) {
   }
   return "available";
 }
-
