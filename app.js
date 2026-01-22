@@ -32,6 +32,10 @@ let spotData = {};
 let dataLoadError = false;
 let svgElement = null;
 let spotElementsById = new Map();
+let tooltipEl = null;
+let bubbleEl = null;
+let tooltipTimer = null;
+let lastTooltipEvent = null;
 let refreshToken = 0;
 let hasData = false;
 let lastUpdatedAt = getStoredUpdatedAt();
@@ -66,6 +70,7 @@ async function loadSvgPlan(svgPath = "plan.svg") {
 
     svgHost.innerHTML = "";
     svgHost.appendChild(svgEl);
+    ensureOverlayElements();
 
     applySpotData(svgEl);
     initPanZoom(svgEl);
@@ -134,12 +139,23 @@ function applySpotData(svgEl) {
     spotEl.dataset.baseFill = baseFill;
     spotEl.style.fill = baseFill;
     if (!spotEl.dataset.bound) {
-      spotEl.addEventListener("click", () => selectSpot(spotId, spotEl));
-      spotEl.addEventListener("mouseenter", () => {
+      spotEl.addEventListener("click", (event) => {
+        selectSpot(spotId, spotEl);
+        showBubble(spotId, spotEl);
+        event.stopPropagation();
+      });
+      spotEl.addEventListener("mouseenter", (event) => {
         if (!spotEl.classList.contains("selected")) {
           applyHoverFill(spotEl);
         }
         showSpotDetails(spotId);
+        scheduleTooltip(spotId, event);
+      });
+      spotEl.addEventListener("mousemove", (event) => {
+        lastTooltipEvent = event;
+        if (tooltipEl && tooltipEl.style.opacity === "1") {
+          showTooltip(spotId, event);
+        }
       });
       spotEl.addEventListener("mouseleave", () => {
         if (spotEl.classList.contains("selected")) {
@@ -147,6 +163,7 @@ function applySpotData(svgEl) {
         } else {
           applyBaseFill(spotEl);
         }
+        hideTooltip();
         showSelectedDetails();
       });
       spotEl.dataset.bound = "true";
@@ -268,6 +285,113 @@ function selectSpot(spotId, spotEl) {
 
   showSpotDetails(spotId);
 }
+
+function ensureOverlayElements() {
+  if (!tooltipEl) {
+    tooltipEl = document.createElement("div");
+    tooltipEl.className = "spot-tooltip";
+    tooltipEl.setAttribute("aria-hidden", "true");
+    svgHost.appendChild(tooltipEl);
+  }
+  if (!bubbleEl) {
+    bubbleEl = document.createElement("div");
+    bubbleEl.className = "spot-bubble";
+    bubbleEl.setAttribute("aria-hidden", "true");
+    svgHost.appendChild(bubbleEl);
+  }
+  if (!svgHost.dataset.overlayBound) {
+    svgHost.addEventListener("click", () => hideBubble());
+    svgHost.dataset.overlayBound = "true";
+  }
+}
+
+function scheduleTooltip(spotId, event) {
+  lastTooltipEvent = event;
+  if (tooltipTimer) {
+    clearTimeout(tooltipTimer);
+  }
+  tooltipTimer = setTimeout(() => {
+    if (lastTooltipEvent) {
+      showTooltip(spotId, lastTooltipEvent);
+    }
+  }, 300);
+}
+
+function showTooltip(spotId, event) {
+  if (!tooltipEl) {
+    return;
+  }
+  const entries = getSpotEntries(spotId);
+  if (entries.length === 0) {
+    hideTooltip();
+    return;
+  }
+  tooltipEl.innerHTML = buildDetailsHtml(entries);
+  tooltipEl.style.opacity = "1";
+  tooltipEl.style.pointerEvents = "none";
+
+  const hostRect = svgHost.getBoundingClientRect();
+  const offsetX = event.clientX - hostRect.left + 12;
+  const offsetY = event.clientY - hostRect.top + 12;
+  positionOverlay(tooltipEl, offsetX, offsetY, hostRect);
+}
+
+function hideTooltip() {
+  if (!tooltipEl) {
+    return;
+  }
+  if (tooltipTimer) {
+    clearTimeout(tooltipTimer);
+    tooltipTimer = null;
+  }
+  lastTooltipEvent = null;
+  tooltipEl.style.opacity = "0";
+}
+
+function showBubble(spotId, spotEl) {
+  if (!bubbleEl || !spotEl) {
+    return;
+  }
+  const entries = getSpotEntries(spotId);
+  if (entries.length === 0) {
+    hideBubble();
+    return;
+  }
+  bubbleEl.innerHTML = buildDetailsHtml(entries);
+  bubbleEl.style.opacity = "1";
+
+  const hostRect = svgHost.getBoundingClientRect();
+  const spotRect = spotEl.getBoundingClientRect();
+  const centerX = spotRect.left + spotRect.width / 2 - hostRect.left;
+  const topY = spotRect.top - hostRect.top;
+  positionOverlay(bubbleEl, centerX, topY - 12, hostRect, true);
+}
+
+function hideBubble() {
+  if (!bubbleEl) {
+    return;
+  }
+  bubbleEl.style.opacity = "0";
+}
+
+function positionOverlay(element, x, y, hostRect, anchorCenter = false) {
+  const width = element.offsetWidth;
+  const height = element.offsetHeight;
+  let left = x;
+  let top = y;
+  if (anchorCenter) {
+    left = x - width / 2;
+    top = y - height;
+  }
+
+  const maxX = hostRect.width - width - 8;
+  const maxY = hostRect.height - height - 8;
+  const clampedX = Math.max(8, Math.min(left, maxX));
+  const clampedY = Math.max(8, Math.min(top, maxY));
+  element.style.transform = "none";
+  element.style.left = `${clampedX}px`;
+  element.style.top = `${clampedY}px`;
+}
 function showSpotDetails(spotId) {
   const entries = getSpotEntries(spotId);
   if (entries.length === 0) {
@@ -275,6 +399,10 @@ function showSpotDetails(spotId) {
     return;
   }
 
+  detailsNode.innerHTML = buildDetailsHtml(entries);
+}
+
+function buildDetailsHtml(entries) {
   const entryLabels = entries.map((entry) => formatUnitLabel(entry.id));
   const statusLabel = entries[0].data.statusLabel || "-";
   const spotLabel = entryLabels.join(" + ");
@@ -331,7 +459,7 @@ function showSpotDetails(spotId) {
     html += `<p><strong>${priceTitle}:</strong> ${formatPrice(totalPrice)} ₽</p>`;
   }
 
-  detailsNode.innerHTML = html;
+  return html;
 }
 
 function getSpotEntries(spotId) {

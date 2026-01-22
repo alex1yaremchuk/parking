@@ -59,6 +59,7 @@ body {
   min-height: 360px;
   overflow: hidden;
   cursor: grab;
+  position: relative;
 }
 
 .info-card h2 {
@@ -179,4 +180,26 @@ svg {
   font-weight: 500;
   pointer-events: none;
   fill: var(--ink);
+}
+
+.spot-tooltip,
+.spot-bubble {
+  position: absolute;
+  z-index: 4;
+  max-width: 240px;
+  padding: 8px 10px;
+  background: #ffffff;
+  border: 1px solid #222222;
+  border-radius: 10px;
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.16);
+  font-size: 12px;
+  line-height: 1.3;
+  color: #1e1e1e;
+  opacity: 0;
+  transition: opacity 120ms ease;
+  pointer-events: none;
+}
+
+.spot-bubble {
+  z-index: 5;
 }
