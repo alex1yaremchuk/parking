@@ -1,5 +1,5 @@
 const CSV_URL =
-  "https://docs.google.com/spreadsheets/d/e/2PACX-1vTH7SGADby5gPRJR44TwuMrnOyk1UgcGu3RPMdkuHOz7HCHx5AoCGw2g7Z17OqFQ1pXhQyW_5bA7JW-/pub?gid=562016189&single=true&output=csv";
+  "https://docs.google.com/spreadsheets/d/e/2PACX-1vQK2UilcIYz6yJocVIcRItb06SOMsC5LXkOfnKAQjTc6rL21U8KDpYJWxbTsnTwUYpQXqh0AlnPTWxZ/pub?gid=562016189&single=true&output=csv";
 const REFRESH_MS = 5000;
 const STORAGE_UPDATED_AT_KEY = "parking:lastUpdatedAt";
 
