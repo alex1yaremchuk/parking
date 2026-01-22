@@ -141,6 +141,7 @@ function applySpotData(svgEl) {
     if (!spotEl.dataset.bound) {
       spotEl.addEventListener("click", (event) => {
         selectSpot(spotId, spotEl);
+        hideTooltip();
         showBubble(spotId, spotEl);
         event.stopPropagation();
       });
@@ -149,11 +150,17 @@ function applySpotData(svgEl) {
           applyHoverFill(spotEl);
         }
         showSpotDetails(spotId);
-        scheduleTooltip(spotId, event);
+        if (!spotEl.classList.contains("selected")) {
+          scheduleTooltip(spotId, event);
+        }
       });
       spotEl.addEventListener("mousemove", (event) => {
         lastTooltipEvent = event;
-        if (tooltipEl && tooltipEl.style.opacity === "1") {
+        if (
+          !spotEl.classList.contains("selected") &&
+          tooltipEl &&
+          tooltipEl.style.opacity === "1"
+        ) {
           showTooltip(spotId, event);
         }
       });
@@ -314,7 +321,7 @@ function scheduleTooltip(spotId, event) {
     if (lastTooltipEvent) {
       showTooltip(spotId, lastTooltipEvent);
     }
-  }, 300);
+  }, 1000);
 }
 
 function showTooltip(spotId, event) {
@@ -362,9 +369,13 @@ function showBubble(spotId, spotEl) {
 
   const hostRect = svgHost.getBoundingClientRect();
   const spotRect = spotEl.getBoundingClientRect();
-  const centerX = spotRect.left + spotRect.width / 2 - hostRect.left;
-  const topY = spotRect.top - hostRect.top;
-  positionOverlay(bubbleEl, centerX, topY - 12, hostRect, true);
+  const anchor = {
+    left: spotRect.left - hostRect.left,
+    top: spotRect.top - hostRect.top,
+    right: spotRect.right - hostRect.left,
+    bottom: spotRect.bottom - hostRect.top
+  };
+  positionBubbleSmart(bubbleEl, anchor, hostRect);
 }
 
 function hideBubble() {
@@ -391,6 +402,28 @@ function positionOverlay(element, x, y, hostRect, anchorCenter = false) {
   element.style.transform = "none";
   element.style.left = `${clampedX}px`;
   element.style.top = `${clampedY}px`;
+}
+
+function positionBubbleSmart(element, anchor, hostRect) {
+  const width = element.offsetWidth;
+  const height = element.offsetHeight;
+  const gap = 10;
+
+  const candidates = [
+    { left: anchor.right + gap, top: anchor.bottom + gap }, // bottom-right
+    { left: anchor.left - width - gap, top: anchor.bottom + gap }, // bottom-left
+    { left: anchor.right + gap, top: anchor.top - height - gap }, // top-right
+    { left: anchor.left - width - gap, top: anchor.top - height - gap } // top-left
+  ];
+
+  const fits = (pos) =>
+    pos.left >= 8 &&
+    pos.top >= 8 &&
+    pos.left + width <= hostRect.width - 8 &&
+    pos.top + height <= hostRect.height - 8;
+
+  const chosen = candidates.find(fits) || candidates[0];
+  positionOverlay(element, chosen.left, chosen.top, hostRect);
 }
 function showSpotDetails(spotId) {
   const entries = getSpotEntries(spotId);
