@@ -201,7 +201,7 @@ svg {
 .spot-tooltip,
 .spot-bubble {
   position: absolute;
-  z-index: 4;
+  z-index: 5;
   max-width: 240px;
   padding: 8px 10px;
   background: var(--card);
@@ -217,5 +217,5 @@ svg {
 }
 
 .spot-bubble {
-  z-index: 5;
+  z-index: 4;
 }
