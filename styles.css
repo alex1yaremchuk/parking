@@ -156,6 +156,8 @@ svg {
   background: #f5e4d6;
   font-weight: 600;
   cursor: pointer;
+  color: var(--ink);
+  text-shadow: none;
 }
 
 .floor-switcher .floor-btn.active {

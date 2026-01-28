@@ -20,8 +20,8 @@ const HOVER_FILL = getCssVar("--hover") || getCssVar("--accent");
 const CLICK_FILL = HOVER_FILL;
 
 const FLOORS = [
-  { id: "floor-1", label: "−2 уровень", file: "floor_1.svg" },
-  { id: "floor-2", label: "−1 уровень", file: "floor_2.svg" },
+  { id: "floor-1", label: "–2 уровень", file: "floor_1.svg" },
+  { id: "floor-2", label: "–1 уровень", file: "floor_2.svg" },
 ];
 
 const detailsNode = document.getElementById("spot-details");
