@@ -6,13 +6,13 @@ const STORAGE_UPDATED_AT_KEY = "parking:lastUpdatedAt";
 const STATUS_LABELS = {
   available: "свободен",
   reserved: "забронирован",
-  sold: "продан"
+  sold: "продан",
 };
 
 const STATUS_COLORS = {
   available: getCssVar("--available"),
   reserved: getCssVar("--reserved"),
-  sold: getCssVar("--sold")
+  sold: getCssVar("--sold"),
 };
 const STORAGE_AVAILABLE_COLOR =
   getCssVar("--storage-available") || STATUS_COLORS.available;
@@ -20,8 +20,8 @@ const HOVER_FILL = getCssVar("--hover") || getCssVar("--accent");
 const CLICK_FILL = HOVER_FILL;
 
 const FLOORS = [
-  { id: "floor-1", label: "1 этаж", file: "floor_1.svg" },
-  { id: "floor-2", label: "2 этаж", file: "plan.svg" }
+  { id: "floor-1", label: "−2 уровень", file: "floor_1.svg" },
+  { id: "floor-2", label: "−1 уровень", file: "floor_2.svg" },
 ];
 
 const detailsNode = document.getElementById("spot-details");
@@ -80,7 +80,7 @@ async function loadSvgPlan(svgPath = "plan.svg") {
     initPanZoom(svgEl);
     showSelectedDetails();
   } catch (error) {
-    svgHost.innerHTML = "<p class=\"muted\">Не удалось загрузить SVG план.</p>";
+    svgHost.innerHTML = '<p class="muted">Не удалось загрузить SVG план.</p>';
   }
 }
 
@@ -121,7 +121,7 @@ function collectSpotElements(svgEl) {
     seenIds.add(spotId);
   });
   const directShapes = Array.from(
-    svgEl.querySelectorAll("rect[id], path[id], polygon[id]")
+    svgEl.querySelectorAll("rect[id], path[id], polygon[id]"),
   );
   directShapes.forEach((shape) => {
     const spotIdRaw = (shape.getAttribute("id") || "").trim();
@@ -171,7 +171,7 @@ function applySpotData(svgEl) {
       const parkingMatch = Object.keys(spotData).find(
         (id) =>
           spotData[id]?.kind === "parking" &&
-          normalizeStorageId(spotData[id]?.storageNumber) === spotId
+          normalizeStorageId(spotData[id]?.storageNumber) === spotId,
       );
       if (parkingMatch) {
         status = spotData[parkingMatch]?.status;
@@ -237,7 +237,7 @@ function getParkingSetIds(parkingId) {
 
   const reversePair = Object.keys(spotData).find(
     (id) =>
-      spotData[id]?.kind === "parking" && spotData[id]?.pairId === normalized
+      spotData[id]?.kind === "parking" && spotData[id]?.pairId === normalized,
   );
   if (reversePair) {
     ids.push(normalizeParkingId(reversePair));
@@ -265,7 +265,7 @@ function getParkingIdsForStorage(storageId) {
   return Object.keys(spotData).filter(
     (id) =>
       spotData[id]?.kind === "parking" &&
-      normalizeStorageId(spotData[id]?.storageNumber) === normalized
+      normalizeStorageId(spotData[id]?.storageNumber) === normalized,
   );
 }
 
@@ -288,11 +288,11 @@ function getSelectionIds(unitId) {
     }
 
     const parkingSet = uniqueIds(
-      parkingIds.flatMap((id) => getParkingSetIds(id))
+      parkingIds.flatMap((id) => getParkingSetIds(id)),
     );
     const storageIds = uniqueIds([
       ...getStorageIdsForParkingSet(parkingSet),
-      normalized
+      normalized,
     ]);
     return uniqueIds([...parkingSet, ...storageIds]);
   }
@@ -318,9 +318,7 @@ function selectSpot(spotId, spotEl) {
 
   const spotIds = getSelectionIds(spotId);
   selectedSpotId = spotId;
-  selectedSpots = spotIds
-    .map((id) => spotElementsById.get(id))
-    .filter(Boolean);
+  selectedSpots = spotIds.map((id) => spotElementsById.get(id)).filter(Boolean);
 
   selectedSpots.forEach((element) => {
     element.classList.add("selected");
@@ -335,12 +333,16 @@ function ensureOverlayElements() {
     tooltipEl = document.createElement("div");
     tooltipEl.className = "spot-tooltip";
     tooltipEl.setAttribute("aria-hidden", "true");
-    svgHost.appendChild(tooltipEl);
   }
   if (!bubbleEl) {
     bubbleEl = document.createElement("div");
     bubbleEl.className = "spot-bubble";
     bubbleEl.setAttribute("aria-hidden", "true");
+  }
+  if (tooltipEl && !tooltipEl.isConnected) {
+    svgHost.appendChild(tooltipEl);
+  }
+  if (bubbleEl && !bubbleEl.isConnected) {
     svgHost.appendChild(bubbleEl);
   }
   if (!svgHost.dataset.overlayBound) {
@@ -410,7 +412,7 @@ function showBubble(spotId, spotEl) {
     left: spotRect.left - hostRect.left,
     top: spotRect.top - hostRect.top,
     right: spotRect.right - hostRect.left,
-    bottom: spotRect.bottom - hostRect.top
+    bottom: spotRect.bottom - hostRect.top,
   };
   positionBubbleSmart(bubbleEl, anchor, hostRect);
 }
@@ -450,7 +452,7 @@ function positionBubbleSmart(element, anchor, hostRect) {
     { left: anchor.right + gap, top: anchor.bottom + gap }, // bottom-right
     { left: anchor.left - width - gap, top: anchor.bottom + gap }, // bottom-left
     { left: anchor.right + gap, top: anchor.top - height - gap }, // top-right
-    { left: anchor.left - width - gap, top: anchor.top - height - gap } // top-left
+    { left: anchor.left - width - gap, top: anchor.top - height - gap }, // top-left
   ];
 
   const fits = (pos) =>
@@ -465,7 +467,7 @@ function positionBubbleSmart(element, anchor, hostRect) {
 function showSpotDetails(spotId) {
   const entries = getSpotEntries(spotId);
   if (entries.length === 0) {
-    detailsNode.innerHTML = "<p class=\"muted\">Нет данных по месту.</p>";
+    detailsNode.innerHTML = '<p class="muted">Нет данных по месту.</p>';
     return;
   }
 
@@ -487,7 +489,7 @@ function buildDetailsHtml(entries) {
         return NaN;
       }
       return entryArea * pricePerSqm;
-    })
+    }),
   );
 
   const isSingle = entries.length === 1;
@@ -498,12 +500,12 @@ function buildDetailsHtml(entries) {
   entries.forEach((entry) => {
     if (entry.data.kind === "storage") {
       html += `<p><strong>${formatUnitLabel(
-        entry.id
+        entry.id,
       )} — площадь кладовой:</strong> ${formatArea(entry.data.storageArea)} м²</p>`;
       return;
     }
     html += `<p><strong>${formatUnitLabel(
-      entry.id
+      entry.id,
     )} — площадь м/м:</strong> ${formatArea(entry.data.spotArea)} м²</p>`;
   });
   if (storageInfo) {
@@ -511,7 +513,7 @@ function buildDetailsHtml(entries) {
   }
   if (Number.isFinite(totalArea)) {
     html += `<p><strong>Общая площадь:</strong> ${formatArea(
-      totalArea
+      totalArea,
     )} м²</p>`;
   }
   if (entries.some((entry) => Number.isFinite(entry.data.pricePerSqm))) {
@@ -519,7 +521,7 @@ function buildDetailsHtml(entries) {
       .map((entry) =>
         Number.isFinite(entry.data.pricePerSqm)
           ? `${formatUnitLabel(entry.id)}: ${formatPrice(entry.data.pricePerSqm)} ₽`
-          : `${formatUnitLabel(entry.id)}: -`
+          : `${formatUnitLabel(entry.id)}: -`,
       )
       .join(", ");
     html += `<p><strong>Цена кв.м.:</strong> ${priceLabels}</p>`;
@@ -543,13 +545,13 @@ function getStorageEntryIds(entries) {
   return new Set(
     entries
       .filter((entry) => entry.data.kind === "storage")
-      .map((entry) => entry.id)
+      .map((entry) => entry.id),
   );
 }
 
 function getStorageInfo(entries, storageEntryIds) {
   const entryWithStorage = entries.find(
-    (entry) => entry.data.kind === "parking" && entry.data.storageNumber
+    (entry) => entry.data.kind === "parking" && entry.data.storageNumber,
   );
   if (!entryWithStorage) {
     return null;
@@ -561,20 +563,20 @@ function getStorageInfo(entries, storageEntryIds) {
   }
 
   const storageArea = pickFirstFinite(
-    entries.map((entry) => entry.data.storageArea)
+    entries.map((entry) => entry.data.storageArea),
   );
   const areaLabel = Number.isFinite(storageArea)
     ? ` (${formatArea(storageArea)} м²)`
     : "";
 
   return {
-    label: `${formatUnitLabel(entryWithStorage.data.storageNumber)}${areaLabel}`
+    label: `${formatUnitLabel(entryWithStorage.data.storageNumber)}${areaLabel}`,
   };
 }
 
 function resolveTotalArea(entries, storageEntryIds) {
   return sumNumbers(
-    entries.map((entry) => resolveEntryArea(entry, storageEntryIds))
+    entries.map((entry) => resolveEntryArea(entry, storageEntryIds)),
   );
 }
 
@@ -729,7 +731,8 @@ function adjustHexColor(hex, amount) {
   const b = num & 0xff;
   const factor = 1 + amount;
   const clamp = (value) => Math.max(0, Math.min(255, Math.round(value)));
-  const next = (clamp(r * factor) << 16) | (clamp(g * factor) << 8) | clamp(b * factor);
+  const next =
+    (clamp(r * factor) << 16) | (clamp(g * factor) << 8) | clamp(b * factor);
   return `#${next.toString(16).padStart(6, "0")}`;
 }
 
@@ -752,7 +755,7 @@ function sumNumbers(values) {
 function showSelectedDetails() {
   if (dataLoadError) {
     detailsNode.innerHTML =
-      "<p class=\"muted\">Не удалось загрузить данные из таблицы.</p>";
+      '<p class="muted">Не удалось загрузить данные из таблицы.</p>';
     return;
   }
 
@@ -761,7 +764,7 @@ function showSelectedDetails() {
     return;
   }
 
-  detailsNode.innerHTML = "<p class=\"muted\">Выберите место на карте.</p>";
+  detailsNode.innerHTML = '<p class="muted">Выберите место на карте.</p>';
 }
 
 function formatPrice(value) {
@@ -798,7 +801,9 @@ function setStoredUpdatedAt(value) {
 }
 
 function getCssVar(name) {
-  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  return getComputedStyle(document.documentElement)
+    .getPropertyValue(name)
+    .trim();
 }
 
 function initPanZoom(svgEl) {
@@ -813,7 +818,7 @@ function initPanZoom(svgEl) {
     dblClickZoomEnabled: false,
     preventMouseEventsDefault: false,
     fit: true,
-    center: true
+    center: true,
   });
 
   if (zoomInBtn) {
@@ -881,7 +886,7 @@ async function loadSpotData(isInitial = false) {
   try {
     const cacheBuster = Date.now();
     const response = await fetch(`${CSV_URL}&v=${cacheBuster}`, {
-      cache: "no-store"
+      cache: "no-store",
     });
     const text = await response.text();
     if (token === refreshToken) {
@@ -947,31 +952,34 @@ function parseCsvData(text) {
   const updatedAt = parseDateTime(headerRow[0] || "");
   const headers = headerRow.slice(1).map((value) => normalizeText(value));
   const statusIdx = resolveIndex(findHeaderIndex(headers, ["статус"]), 0);
-  const pairIdx = resolveIndex(findHeaderIndex(headers, ["№пары", "пары", "пара"]), 1);
+  const pairIdx = resolveIndex(
+    findHeaderIndex(headers, ["№пары", "пары", "пара"]),
+    1,
+  );
   const storageIdx = resolveIndex(
     findHeaderIndex(headers, ["№кладовой", "кладовой", "кладовая"]),
-    2
+    2,
   );
   const spotAreaIdx = resolveIndex(
     findHeaderIndex(headers, [
       "площадьм/м",
       "площадьмм",
       "площадьмместа",
-      "площадьместа"
+      "площадьместа",
     ]),
-    3
+    3,
   );
   const storageAreaIdx = resolveIndex(
     findHeaderIndex(headers, ["площадькладовой"]),
-    4
+    4,
   );
   const totalAreaIdx = resolveIndex(
     findHeaderIndex(headers, ["общаяплощадь"]),
-    5
+    5,
   );
   const priceIdx = resolveIndex(
     findHeaderIndex(headers, ["ценакв.м", "ценаквм", "ценаквм."]),
-    6
+    6,
   );
 
   const data = {};
@@ -998,7 +1006,9 @@ function parseCsvData(text) {
       kind === "parking" ? normalizeStorageId(rawStorage) : "";
     const spotArea = parseNumber(rawSpotArea);
     const storageArea =
-      kind === "storage" ? parseNumber(rawSpotArea) : parseNumber(rawStorageArea);
+      kind === "storage"
+        ? parseNumber(rawSpotArea)
+        : parseNumber(rawStorageArea);
     const totalArea = parseNumber(rawTotalArea);
     const pricePerSqm = parseNumber(rawPrice);
 
@@ -1011,7 +1021,7 @@ function parseCsvData(text) {
       spotArea: kind === "storage" ? NaN : spotArea,
       storageArea,
       totalArea,
-      pricePerSqm
+      pricePerSqm,
     };
   });
   return { data, updatedAt };
@@ -1027,13 +1037,13 @@ function parseCsv(text) {
     const char = text[i];
     const next = text[i + 1];
 
-    if (char === "\"" && inQuotes && next === "\"") {
-      current += "\"";
+    if (char === '"' && inQuotes && next === '"') {
+      current += '"';
       i += 1;
       continue;
     }
 
-    if (char === "\"") {
+    if (char === '"') {
       inQuotes = !inQuotes;
       continue;
     }
@@ -1113,7 +1123,7 @@ function normalizeStorageId(value) {
 
 function findHeaderIndex(headers, keywords) {
   return headers.findIndex((header) =>
-    keywords.some((keyword) => header.includes(keyword))
+    keywords.some((keyword) => header.includes(keyword)),
   );
 }
 
@@ -1153,7 +1163,7 @@ function parseDateTime(value) {
     Number(day),
     Number(hour),
     Number(minute),
-    Number(second || 0)
+    Number(second || 0),
   );
 
   return Number.isNaN(date.getTime()) ? NaN : date.getTime();
