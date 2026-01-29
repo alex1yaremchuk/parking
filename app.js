@@ -475,7 +475,9 @@ function showSpotDetails(spotId) {
     return;
   }
 
-  detailsNode.innerHTML = buildDetailsHtml(entries, { includeAction: true });
+  detailsNode.innerHTML = buildDetailsHtml(entries, {
+    includeAction: selectedSpotId === spotId,
+  });
 }
 
 function buildDetailsHtml(entries, options = {}) {
