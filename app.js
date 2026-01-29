@@ -51,6 +51,7 @@ async function init() {
   initFloorSwitcher();
   await loadSvgPlan(getActiveFloor()?.file);
   showSelectedDetails();
+  bindTouchGestures();
   loadSpotData(true).then((updated) => {
     if (updated && svgElement) {
       applySpotData(svgElement);
@@ -58,6 +59,23 @@ async function init() {
     }
   });
   startAutoRefresh();
+}
+
+function bindTouchGestures() {
+  if (!svgHost || svgHost.dataset.touchBound) {
+    return;
+  }
+  const stopPinchZoom = (event) => {
+    if (event.cancelable) {
+      event.preventDefault();
+    }
+  };
+  svgHost.addEventListener("touchstart", stopPinchZoom, { passive: false });
+  svgHost.addEventListener("touchmove", stopPinchZoom, { passive: false });
+  svgHost.addEventListener("gesturestart", stopPinchZoom, { passive: false });
+  svgHost.addEventListener("gesturechange", stopPinchZoom, { passive: false });
+  svgHost.addEventListener("gestureend", stopPinchZoom, { passive: false });
+  svgHost.dataset.touchBound = "true";
 }
 
 async function loadSvgPlan(svgPath = "plan.svg") {

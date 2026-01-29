@@ -72,6 +72,10 @@ body {
   touch-action: none;
 }
 
+.svg-host svg {
+  touch-action: none;
+}
+
 .info-card h2 {
   margin: 0 0 12px;
   font-size: 1.1rem;
