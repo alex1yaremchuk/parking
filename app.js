@@ -65,13 +65,87 @@ function bindTouchGestures() {
   if (!svgHost || svgHost.dataset.touchBound) {
     return;
   }
+  let pinchStart = null;
+
+  const getDistance = (touches) => {
+    const [t1, t2] = touches;
+    const dx = t2.clientX - t1.clientX;
+    const dy = t2.clientY - t1.clientY;
+    return Math.hypot(dx, dy);
+  };
+
+  const getMidpoint = (touches) => {
+    const [t1, t2] = touches;
+    return {
+      x: (t1.clientX + t2.clientX) / 2,
+      y: (t1.clientY + t2.clientY) / 2,
+    };
+  };
+
+  const toLocalPoint = (point) => {
+    const rect = svgHost.getBoundingClientRect();
+    return {
+      x: point.x - rect.left,
+      y: point.y - rect.top,
+    };
+  };
+
   const stopPinchZoom = (event) => {
     if (event.cancelable) {
       event.preventDefault();
     }
   };
-  svgHost.addEventListener("touchstart", stopPinchZoom, { passive: false });
-  svgHost.addEventListener("touchmove", stopPinchZoom, { passive: false });
+
+  svgHost.addEventListener(
+    "touchstart",
+    (event) => {
+      stopPinchZoom(event);
+      if (!panZoomInstance || event.touches.length < 2) {
+        return;
+      }
+      const touches = Array.from(event.touches).slice(0, 2);
+      pinchStart = {
+        distance: getDistance(touches),
+        zoom: panZoomInstance.getZoom(),
+        point: toLocalPoint(getMidpoint(touches)),
+      };
+    },
+    { passive: false },
+  );
+
+  svgHost.addEventListener(
+    "touchmove",
+    (event) => {
+      stopPinchZoom(event);
+      if (!panZoomInstance || !pinchStart || event.touches.length < 2) {
+        return;
+      }
+      const touches = Array.from(event.touches).slice(0, 2);
+      const distance = getDistance(touches);
+      if (!distance || !pinchStart.distance) {
+        return;
+      }
+      const scale = distance / pinchStart.distance;
+      const nextZoom = pinchStart.zoom * scale;
+      const point = toLocalPoint(getMidpoint(touches));
+      if (typeof panZoomInstance.zoomAtPoint === "function") {
+        panZoomInstance.zoomAtPoint(nextZoom, point);
+      } else {
+        panZoomInstance.zoom(nextZoom);
+      }
+    },
+    { passive: false },
+  );
+
+  const clearPinch = (event) => {
+    stopPinchZoom(event);
+    if (!event.touches || event.touches.length < 2) {
+      pinchStart = null;
+    }
+  };
+
+  svgHost.addEventListener("touchend", clearPinch, { passive: false });
+  svgHost.addEventListener("touchcancel", clearPinch, { passive: false });
   svgHost.addEventListener("gesturestart", stopPinchZoom, { passive: false });
   svgHost.addEventListener("gesturechange", stopPinchZoom, { passive: false });
   svgHost.addEventListener("gestureend", stopPinchZoom, { passive: false });
