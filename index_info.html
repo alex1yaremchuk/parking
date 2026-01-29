@@ -5,13 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Паркинг — интерактивная карта</title>
   <link rel="stylesheet" href="styles.css?v=20260129-2" />
-  <style>
-    .no-info .layout {
-      grid-template-columns: 1fr;
-    }
-  </style>
 </head>
-<body class="no-info">
+<body>
   <div class="page">
     <header class="hero">
       <h1>Интерактивная карта паркинга</h1>
@@ -27,6 +22,18 @@
         <div id="floor-switcher" class="floor-switcher" role="tablist" aria-label="Выбор этажа"></div>
         <div id="svg-host" class="svg-host" aria-label="План паркинга"></div>
       </section>
+
+      <aside class="info-card" aria-live="polite">
+        <h2>Данные по месту</h2>
+        <div id="spot-details" class="spot-details">
+          <p class="muted">Выберите место на карте.</p>
+        </div>
+        <div class="legend">
+          <div><span class="swatch available">1</span>Доступно</div>
+          <div><span class="swatch reserved">1</span>Бронь</div>
+          <div><span class="swatch sold"></span>Продано</div>
+        </div>
+      </aside>
     </main>
   </div>
 
