@@ -69,6 +69,7 @@ body {
   overflow: hidden;
   cursor: grab;
   position: relative;
+  touch-action: none;
 }
 
 .info-card h2 {
