@@ -190,7 +190,9 @@ function applySpotData(svgEl) {
       });
       spotEl.addEventListener("mouseenter", (event) => {
         applyHoverToSet(spotId);
-        showSpotDetails(spotId);
+        if (!selectedSpotId) {
+          showSpotDetails(spotId);
+        }
         if (!spotEl.classList.contains("selected")) {
           scheduleTooltip(spotId, event);
         }
@@ -346,7 +348,16 @@ function ensureOverlayElements() {
     svgHost.appendChild(bubbleEl);
   }
   if (!svgHost.dataset.overlayBound) {
-    svgHost.addEventListener("click", () => hideBubble());
+    svgHost.addEventListener("click", (event) => {
+      if (event.target.closest(".parking-spot")) {
+        return;
+      }
+      if (event.target.closest(".spot-bubble")) {
+        return;
+      }
+      hideBubble();
+      resetSelection();
+    });
     svgHost.dataset.overlayBound = "true";
   }
   if (bubbleEl && !bubbleEl.dataset.clickBound) {
@@ -469,6 +480,9 @@ function positionBubbleSmart(element, anchor, hostRect) {
   positionOverlay(element, chosen.left, chosen.top, hostRect);
 }
 function showSpotDetails(spotId) {
+  if (!detailsNode) {
+    return;
+  }
   const entries = getSpotEntries(spotId);
   if (entries.length === 0) {
     detailsNode.innerHTML = '<p class="muted">Нет данных по месту.</p>';
@@ -853,6 +867,9 @@ function sumNumbers(values) {
 }
 
 function showSelectedDetails() {
+  if (!detailsNode) {
+    return;
+  }
   if (dataLoadError) {
     detailsNode.innerHTML =
       '<p class="muted">Не удалось загрузить данные из таблицы.</p>';
