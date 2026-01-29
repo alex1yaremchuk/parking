@@ -349,6 +349,10 @@ function ensureOverlayElements() {
     svgHost.addEventListener("click", () => hideBubble());
     svgHost.dataset.overlayBound = "true";
   }
+  if (bubbleEl && !bubbleEl.dataset.clickBound) {
+    bubbleEl.addEventListener("click", (event) => event.stopPropagation());
+    bubbleEl.dataset.clickBound = "true";
+  }
 }
 
 function scheduleTooltip(spotId, event) {
@@ -372,7 +376,7 @@ function showTooltip(spotId, event) {
     hideTooltip();
     return;
   }
-  tooltipEl.innerHTML = buildDetailsHtml(entries);
+  tooltipEl.innerHTML = buildDetailsHtml(entries, { includeAction: false });
   tooltipEl.style.opacity = "1";
   tooltipEl.style.pointerEvents = "none";
 
@@ -403,7 +407,7 @@ function showBubble(spotId, spotEl) {
     hideBubble();
     return;
   }
-  bubbleEl.innerHTML = buildDetailsHtml(entries);
+  bubbleEl.innerHTML = buildDetailsHtml(entries, { includeAction: true });
   bubbleEl.style.opacity = "1";
 
   const hostRect = svgHost.getBoundingClientRect();
@@ -471,10 +475,11 @@ function showSpotDetails(spotId) {
     return;
   }
 
-  detailsNode.innerHTML = buildDetailsHtml(entries);
+  detailsNode.innerHTML = buildDetailsHtml(entries, { includeAction: true });
 }
 
-function buildDetailsHtml(entries) {
+function buildDetailsHtml(entries, options = {}) {
+  const { includeAction = false } = options;
   const entryLabels = entries.map((entry) => formatUnitLabel(entry.id));
   const statusLabel = entries[0].data.statusLabel || "-";
   const spotLabel = entryLabels.join(" + ");
@@ -529,6 +534,15 @@ function buildDetailsHtml(entries) {
   if (Number.isFinite(totalPrice)) {
     const priceTitle = isSingle ? "Цена" : "Цена комплекта";
     html += `<p><strong>${priceTitle}:</strong> ${formatPrice(totalPrice)} ₽</p>`;
+  }
+
+  if (includeAction) {
+    const telegramUrl = buildTelegramUrl(entries);
+    if (telegramUrl) {
+      html += `<div class="booking-row">${buildTelegramButtonHtml(
+        telegramUrl,
+      )}</div>`;
+    }
   }
 
   return html;
@@ -616,6 +630,90 @@ function formatUnitLabel(value) {
     return `№${part1}.${part2}`;
   }
   return normalized;
+}
+
+function uniqueLabels(labels) {
+  if (!Array.isArray(labels)) {
+    return [];
+  }
+  const seen = new Set();
+  return labels
+    .map((label) => String(label || "").trim())
+    .filter((label) => {
+      if (!label || seen.has(label)) {
+        return false;
+      }
+      seen.add(label);
+      return true;
+    });
+}
+
+function buildTelegramUrl(entries) {
+  if (!entries || entries.length === 0) {
+    return "";
+  }
+  const normalizedEntries = entries.map((entry) => ({
+    id: entry.id,
+    kind: entry.data.kind,
+    label: formatUnitLabel(entry.id),
+    storageNumber: entry.data.storageNumber,
+  }));
+  const parkingLabels = normalizedEntries
+    .filter((entry) => entry.kind === "parking")
+    .map((entry) => entry.label)
+    .filter((label) => label !== "-");
+  const storageLabelsFromEntries = normalizedEntries
+    .filter((entry) => entry.kind === "storage")
+    .map((entry) => entry.label)
+    .filter((label) => label !== "-");
+  const storageLabelsFromParking = normalizedEntries
+    .filter((entry) => entry.kind === "parking" && entry.storageNumber)
+    .map((entry) => formatUnitLabel(entry.storageNumber))
+    .filter((label) => label !== "-");
+  const storageLabels = uniqueLabels([
+    ...storageLabelsFromEntries,
+    ...storageLabelsFromParking,
+  ]);
+
+  let text = "Здравствуйте! Интересует комплект.";
+  if (normalizedEntries.length === 1 && storageLabels.length === 0) {
+    const entry = normalizedEntries[0];
+    if (entry.kind === "parking") {
+      text = `Здравствуйте! Интересует парковочное место ${entry.label}.`;
+    } else if (entry.kind === "storage") {
+      text = `Здравствуйте! Интересует кладовая ${entry.label}.`;
+    }
+  } else {
+    const parts = [];
+    if (parkingLabels.length > 0) {
+      parts.push(
+        `${parkingLabels.length === 1 ? "место" : "места"} ${parkingLabels.join(
+          ", ",
+        )}`,
+      );
+    }
+    if (storageLabels.length > 0) {
+      parts.push(
+        `${storageLabels.length === 1 ? "кладовая" : "кладовые"} ${storageLabels.join(
+          ", ",
+        )}`,
+      );
+    }
+    if (parts.length > 0) {
+      text = `Здравствуйте! Интересует комплект: ${parts.join("; ")}.`;
+    }
+  }
+  const encodedText = encodeURIComponent(text);
+  return `https://t.me/+79872150500?text=${encodedText}`;
+}
+
+function buildTelegramButtonHtml(url) {
+  return `<a class="telegram-button" href="${url}" target="_blank" rel="noopener noreferrer">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" class="telegram-icon" aria-hidden="true">
+      <path fill="currentColor" d="M89.442,11.418c-12.533,5.19-66.27,27.449-81.118,33.516c-9.958,3.886-4.129,7.529-4.129,7.529s8.5,2.914,15.786,5.1c7.286,2.186,11.172-0.243,11.172-0.243l34.244-23.073c12.143-8.257,9.229-1.457,6.315,1.457c-6.315,6.315-16.758,16.272-25.501,24.287c-3.886,3.4-1.943,6.315-0.243,7.772c6.315,5.343,23.558,16.272,24.53,17.001c5.131,3.632,15.223,8.861,16.758-2.186c0,0,6.072-38.13,6.072-38.13c1.943-12.872,3.886-24.773,4.129-28.173C98.185,8.018,89.442,11.418,89.442,11.418z"></path>
+    </svg>
+    Забронировать
+  </a>`;
 }
 
 function applyBaseFill(spotEl) {
