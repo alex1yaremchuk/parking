@@ -90,8 +90,13 @@ function bindTouchGestures() {
     };
   };
 
+  const shouldBlockTouch = (event) => {
+    const touches = event.touches;
+    return touches && touches.length > 1;
+  };
+
   const stopPinchZoom = (event) => {
-    if (event.cancelable) {
+    if (shouldBlockTouch(event) && event.cancelable) {
       event.preventDefault();
     }
   };
