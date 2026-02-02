@@ -157,6 +157,11 @@ svg {
   transition: fill 160ms ease;
   opacity: 1;
 }
+
+.map-marker {
+  cursor: pointer;
+  pointer-events: all;
+}
 .map-card {
   position: relative;
 }

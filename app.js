@@ -24,6 +24,16 @@ const FLOORS = [
   { id: "floor-2", label: "–1 уровень", file: "floor_2.svg" },
 ];
 
+const MARKER_LABELS = {
+  elevator1: "Лифт",
+  elevator2: "Лифт",
+  elevator3: "Лифт",
+  ladder1: "Лестница",
+  ladder2: "Лестница",
+  mark_lift: "Проход к лифтам",
+  mark_exit: "Въезд/выезд",
+};
+
 const detailsNode = document.getElementById("spot-details");
 const svgHost = document.getElementById("svg-host");
 const floorSwitcher = document.getElementById("floor-switcher");
@@ -44,6 +54,7 @@ let refreshToken = 0;
 let hasData = false;
 let lastUpdatedAt = getStoredUpdatedAt();
 let activeFloorId = FLOORS[0]?.id || null;
+let markerElementsById = new Map();
 
 init();
 
@@ -174,6 +185,7 @@ async function loadSvgPlan(svgPath = "plan.svg") {
     ensureOverlayElements();
 
     applySpotData(svgEl);
+    applyMarkerData(svgEl);
     initPanZoom(svgEl);
     showSelectedDetails();
   } catch (error) {
@@ -235,6 +247,51 @@ function collectSpotElements(svgEl) {
     seenIds.add(spotId);
   });
   return spotElements;
+}
+
+function collectMarkerElements(svgEl) {
+  const markers = new Map();
+  Object.keys(MARKER_LABELS).forEach((markerId) => {
+    const element = svgEl.querySelector(`#${markerId}`);
+    if (!element) {
+      return;
+    }
+    element.classList.add("map-marker");
+    element.setAttribute("data-marker-id", markerId);
+    markers.set(markerId, element);
+  });
+  return markers;
+}
+
+function applyMarkerData(svgEl) {
+  const markers = collectMarkerElements(svgEl);
+  markerElementsById = markers;
+  markerElementsById.forEach((markerEl, markerId) => {
+    const label = MARKER_LABELS[markerId];
+    if (!label) {
+      return;
+    }
+    if (!markerEl.dataset.markerBound) {
+      markerEl.addEventListener("click", (event) => {
+        hideTooltip();
+        showTextBubble(label, markerEl);
+        event.stopPropagation();
+      });
+      markerEl.addEventListener("mouseenter", (event) => {
+        scheduleTextTooltip(label, event);
+      });
+      markerEl.addEventListener("mousemove", (event) => {
+        lastTooltipEvent = event;
+        if (tooltipEl && tooltipEl.style.opacity === "1") {
+          showTextTooltip(label, event);
+        }
+      });
+      markerEl.addEventListener("mouseleave", () => {
+        hideTooltip();
+      });
+      markerEl.dataset.markerBound = "true";
+    }
+  });
 }
 
 function collectLabelElements(svgEl) {
@@ -475,6 +532,18 @@ function scheduleTooltip(spotId, event) {
   }, 1000);
 }
 
+function scheduleTextTooltip(text, event) {
+  lastTooltipEvent = event;
+  if (tooltipTimer) {
+    clearTimeout(tooltipTimer);
+  }
+  tooltipTimer = setTimeout(() => {
+    if (lastTooltipEvent) {
+      showTextTooltip(text, lastTooltipEvent);
+    }
+  }, 1000);
+}
+
 function showTooltip(spotId, event) {
   if (!tooltipEl) {
     return;
@@ -485,6 +554,25 @@ function showTooltip(spotId, event) {
     return;
   }
   tooltipEl.innerHTML = buildDetailsHtml(entries, { includeAction: false });
+  tooltipEl.style.opacity = "1";
+  tooltipEl.style.pointerEvents = "none";
+
+  const hostRect = svgHost.getBoundingClientRect();
+  const offsetX = event.clientX - hostRect.left + 12;
+  const offsetY = event.clientY - hostRect.top + 12;
+  positionOverlay(tooltipEl, offsetX, offsetY, hostRect);
+}
+
+function showTextTooltip(text, event) {
+  if (!tooltipEl) {
+    return;
+  }
+  const label = escapeHtml(text || "");
+  if (!label) {
+    hideTooltip();
+    return;
+  }
+  tooltipEl.innerHTML = `<p><strong>${label}</strong></p>`;
   tooltipEl.style.opacity = "1";
   tooltipEl.style.pointerEvents = "none";
 
@@ -525,6 +613,29 @@ function showBubble(spotId, spotEl) {
     top: spotRect.top - hostRect.top,
     right: spotRect.right - hostRect.left,
     bottom: spotRect.bottom - hostRect.top,
+  };
+  positionBubbleSmart(bubbleEl, anchor, hostRect);
+}
+
+function showTextBubble(text, anchorEl) {
+  if (!bubbleEl || !anchorEl) {
+    return;
+  }
+  const label = escapeHtml(text || "");
+  if (!label) {
+    hideBubble();
+    return;
+  }
+  bubbleEl.innerHTML = `<p><strong>${label}</strong></p>`;
+  bubbleEl.style.opacity = "1";
+
+  const hostRect = svgHost.getBoundingClientRect();
+  const anchorRect = anchorEl.getBoundingClientRect();
+  const anchor = {
+    left: anchorRect.left - hostRect.left,
+    top: anchorRect.top - hostRect.top,
+    right: anchorRect.right - hostRect.left,
+    bottom: anchorRect.bottom - hostRect.top,
   };
   positionBubbleSmart(bubbleEl, anchor, hostRect);
 }
@@ -1296,6 +1407,15 @@ function normalizeText(value) {
   return String(value || "")
     .toLowerCase()
     .replace(/\s+/g, "");
+}
+
+function escapeHtml(value) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 function normalizeUnitId(value) {
