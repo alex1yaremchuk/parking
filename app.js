@@ -218,8 +218,14 @@ function collectSpotElements(svgEl) {
       return;
     }
 
+    const ancestorChain = new Set();
+    let currentNode = shape;
+    while (currentNode && currentNode !== group) {
+      ancestorChain.add(currentNode);
+      currentNode = currentNode.parentElement;
+    }
     Array.from(group.children).forEach((child) => {
-      if (child !== shape) {
+      if (!ancestorChain.has(child) && child !== shape) {
         child.style.pointerEvents = "none";
       }
     });
