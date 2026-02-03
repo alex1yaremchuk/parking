@@ -3,6 +3,8 @@ const CSV_URL =
 const REFRESH_MS = 5000;
 const STORAGE_UPDATED_AT_KEY = "parking:lastUpdatedAt";
 
+const ASSET_VERSION = "20260203-2";
+
 const STATUS_LABELS = {
   available: "свободен",
   reserved: "забронирован",
@@ -170,11 +172,15 @@ function bindTouchGestures() {
 
 async function loadSvgPlan(svgPath = "plan.svg") {
   try {
+    const cacheKey = `v=${ASSET_VERSION}`;
+    const url = svgPath.includes("?")
+      ? `${svgPath}&${cacheKey}`
+      : `${svgPath}?${cacheKey}`;
     if (panZoomInstance) {
       panZoomInstance.destroy();
       panZoomInstance = null;
     }
-    const response = await fetch(encodeURI(svgPath));
+    const response = await fetch(encodeURI(url));
     const svgText = await response.text();
     const svgDoc = new DOMParser().parseFromString(svgText, "image/svg+xml");
     const svgEl = svgDoc.documentElement;
