@@ -768,8 +768,11 @@ function buildDetailsHtml(entries, options = {}) {
     html += `<p><strong>Цена кв.м.:</strong> ${priceLabels}</p>`;
   }
   if (Number.isFinite(totalPrice)) {
+    const roundedTotalPrice = Math.floor(totalPrice);
     const priceTitle = isSingle ? "Цена" : "Цена комплекта";
-    html += `<p><strong>${priceTitle}:</strong> ${formatPrice(totalPrice)} ₽</p>`;
+    html += `<p><strong>${priceTitle}:</strong> ${formatPrice(
+      roundedTotalPrice,
+    )} ₽</p>`;
   }
 
   if (includeAction) {
