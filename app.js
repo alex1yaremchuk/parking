@@ -761,14 +761,14 @@ function buildDetailsHtml(entries, options = {}) {
     const priceLabels = entries
       .map((entry) =>
         Number.isFinite(entry.data.pricePerSqm)
-          ? `${formatUnitLabel(entry.id)}: ${formatPrice(entry.data.pricePerSqm)} ₽`
+          ? `${formatUnitLabel(entry.id)}: ${formatPrice(Math.round(entry.data.pricePerSqm))} ₽`
           : `${formatUnitLabel(entry.id)}: -`,
       )
       .join(", ");
     html += `<p><strong>Цена кв.м.:</strong> ${priceLabels}</p>`;
   }
   if (Number.isFinite(totalPrice)) {
-    const roundedTotalPrice = Math.floor(totalPrice);
+    const roundedTotalPrice = Math.round(totalPrice);
     const priceTitle = isSingle ? "Цена" : "Цена комплекта";
     html += `<p><strong>${priceTitle}:</strong> ${formatPrice(
       roundedTotalPrice,
